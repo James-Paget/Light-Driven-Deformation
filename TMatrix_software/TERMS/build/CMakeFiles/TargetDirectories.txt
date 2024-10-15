@@ -1,0 +1,3 @@
+/home/james/Desktop/TERMS/build/CMakeFiles/terms.dir
+/home/james/Desktop/TERMS/build/CMakeFiles/edit_cache.dir
+/home/james/Desktop/TERMS/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,9 @@
+# The fortran modules provided by this target.
+provides
+ eps.mod
+ hdffive.mod
+ linalg.mod
+ miet.mod
+ multiscat.mod
+ sphmsv.mod
+ swav.mod
