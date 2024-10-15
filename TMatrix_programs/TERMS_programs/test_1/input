@@ -1,0 +1,8 @@
+ModeAndScheme 2 3
+Wavelength 300 900 300
+Medium 1.7689 # epsilon of water
+Scatterers 4
+Au 31.5 0 -50 30
+Au -31.5 0 -50 30
+Au 22.2738 22.2738 50 30
+Au -22.2738 -22.2738 50 30
