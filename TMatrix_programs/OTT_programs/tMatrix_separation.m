@@ -46,7 +46,7 @@ for iter = 1:iterations
     %Find force along X axis
     %xrange = [1;0;0] .* linspace(p1_pos(1), p2_pos(1), force_samples);
     %fxyz = ott.forcetorque(beam, T, xrange);
-    %% UNSURE OF HOW FORCETORQUE CALCULATES ITS VALUES -> DIFFICULT TO SAY IF THIS APPROACH IS CORRECT
+    %% USING VECTOR NORM INSTEAD OF X DIRECTION AS NET MOMENTUM CANCELLED
     [force, torque] = ott.forcetorque(beam, scattered_beam);
     force_values(1, iter) = (iter-1)*factor;
     force_values(2, iter) = vecnorm(force);%force(1);
