@@ -132,10 +132,18 @@ void generateRandomGrid() {
         //boolean cond = cond_spheroid || cond_torus;
         //Multi sphere ring
         //boolean cond = ringOfSpheresCond(new PVector(x,y,z), 10, 0.3*gridDim.x, 0.3*gridDim.x);
-        //Sphere
-        boolean cond_s1 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0, 2) ) < 1.4*gridDim.x;
-        boolean cond_s2 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z +gridDim.z/6.0 -gridDim.z/2.0, 2) ) < 0.3*gridDim.x;
-        boolean cond = cond_s1 || cond_s2;
+        //Sphere & Sphere
+        //boolean cond_s1 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0, 2) ) < 1.4*gridDim.x;
+        //boolean cond_s2 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z +gridDim.z/6.0 -gridDim.z/2.0, 2) ) < 0.3*gridDim.x;
+        //boolean cond = cond_s1 || cond_s2;
+        //Sphere & Anti-Sphere
+        //boolean cond_s1 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0, 2) ) < 1.4*gridDim.x;
+        //boolean cond_s2 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z +gridDim.z/6.0 -gridDim.z/2.0, 2) ) < 0.5*gridDim.x;
+        //boolean cond = cond_s1 && !cond_s2;
+        //Sphere Tri Setup
+        boolean cond_ring = ringOfSpheresCond(new PVector(x,y,z), 3, 0.4*gridDim.x, 0.15*gridDim.x);
+        boolean cond_other = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0 +0.15*gridDim.x, 2) ) < 0.4*gridDim.x;
+        boolean cond = cond_ring || cond_other;
         //Random
         //boolean cond = (random(0.0, 1.0) < 0.2);  //## Bug Fixing ##
         if(cond) {
@@ -174,8 +182,10 @@ void drawGrid(PVector pos, grid cGrid) {
     pushStyle();
     //fill(200,120,120);      //Fixed Color
     float reduced_gridPos = pos.z;// -gridDim_coords.z/2.0;
-    float reduced_gridHeight = 0.85*gridDim_coords.z;   //Used to tune color gradient
-    fill(255*pow(cos( (PI/2.0)*(reduced_gridPos/reduced_gridHeight) ), 1), 80, 255*(reduced_gridPos/reduced_gridHeight));      //Z Color        //pow(sin( (PI/2.0)*(reduced_gridPos/reduced_gridHeight) ), 2)
+    float reduced_gridHeight = 0.65*gridDim_coords.z;   //Used to tune color gradient
+    //fill(255*pow(cos( (PI/2.0)*(reduced_gridPos/reduced_gridHeight) ), 1), 80, 255*(reduced_gridPos/reduced_gridHeight));      //Z Color        //pow(sin( (PI/2.0)*(reduced_gridPos/reduced_gridHeight) ), 2)
+    //fill(255*cos( (PI/2.0)*(reduced_gridPos/reduced_gridHeight) ), 120, 255*(reduced_gridPos/reduced_gridHeight));
+    fill(255*cos( (PI/2.0)*(pos.z/gridDim_coords.z) ), 100, 255*(pos.z/gridDim_coords.z));
     box(gridDim_coords.x/gridDim.x, gridDim_coords.y/gridDim.y, gridDim_coords.z/gridDim.z);
     popStyle();
     popMatrix();

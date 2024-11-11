@@ -11,10 +11,11 @@ n_particle = 1.59;      % Polystyrene
 
 view_range = 2e-6;
 
+Nmax = 50;
 iterations = 1000;
-iterations_wavelength = 5;
+iterations_wavelength = 1;
 %force_samples = 100;
-factor = 0.01;  %Fractions of a particle radius to jump up by
+factor = 0.05;  %Fractions of a particle radius to jump up by
 
 wavelength0_base = 1064e-9;  % Vacuum wavelength
 wavelength_medium_base = wavelength0_base / n_medium;
@@ -23,18 +24,19 @@ radius = 0.5*wavelength_medium_base;
 hold on;
 for iter_wave = 1:iterations_wavelength
     force_values = zeros(2,iterations);
-    wavelength0 = wavelength0_base*iter_wave*0.5;
+    wavelength0 = wavelength0_base*iter_wave;
 
     %Generate beam, centered at origin, moving in +Z direction
     beam = ott.BscPlane(0, 0, ...
         'polarisation', [ 1 0 ], ...
         'index_medium', n_medium, ...
-        'wavelength0', wavelength0 ...
+        'wavelength0', wavelength0, ...
+        'Nmax', Nmax ...
     );
     for iter = 1:iterations
         %Setup no particle positions
-        p1_pos = [-radius-(iter-1)*factor*radius; 0; 0];
-        p2_pos = [ radius+(iter-1)*factor*radius; 0; 0];
+        p1_pos = [-radius-(iter)*factor*radius; 0; 0];
+        p2_pos = [ radius+(iter)*factor*radius; 0; 0];
         p1_shape = ott.shapes.Sphere(radius, p1_pos);
         p2_shape = ott.shapes.Sphere(radius, p2_pos);
         p_union = ott.shapes.Union([p1_shape, p2_shape]);
@@ -63,7 +65,7 @@ for iter_wave = 1:iterations_wavelength
         [p2_force, p2_torque] = ott.forcetorque(beam, scattered_p2_beam);
         [union_force, union_torque] = ott.forcetorque(beam, scattered_union_beam);
         interparticle_force = union_torque -p1_force -p2_force;
-        force_values(1, iter) = (iter-1)*factor;
+        force_values(1, iter) = 2*(iter)*factor*radius;
         force_values(2, iter) = interparticle_force(1);%vecnorm(force);%force(1);
     
         %{
@@ -76,7 +78,8 @@ for iter_wave = 1:iterations_wavelength
     end
     figure();
     plot(force_values(1,:), force_values(2,:));
-    xlabel("Separation in radi ("+radius+"m)");
+    ylim([-1e-15 1e-15]);
+    xlabel("Separation (m)");
     ylabel("Resultant X force from inter-particle scattering");
 end
 hold off;

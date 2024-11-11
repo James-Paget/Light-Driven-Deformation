@@ -6,6 +6,7 @@ close all;
 ott.warning('once');
 ott.change_warnings('off');
 
+Nmax = 75;
 n_medium = 1.33;        % Water
 n_particle = 1.59;      % Polystyrene
 wavelength0 = 1064e-9;  % Vacuum wavelength
@@ -18,7 +19,7 @@ factor = 0.4;
 sample_number = 50;
 
 beam_inc = ott.BscPlane(0, 0, 'polarisation', [ 1 0 ], ...
-     'index_medium', n_medium, 'wavelength0', wavelength0);
+     'index_medium', n_medium, 'wavelength0', wavelength0, 'Nmax', Nmax);
 
 figure_E_x_plots = figure;
 figure_F_x_plots = figure;
@@ -37,8 +38,9 @@ for iter = 0:iterations-1
     %shape_union = ott.shapes.Union([shape_test_1, shape_test_2]);
     %shape_union = shape_test_1
     
+    %ott.TmatrixDda
     T_union = ott.TmatrixMie.simple(shape_union, 'wavelength0', wavelength0, ...
-       'index_medium', n_medium, 'index_particle', n_particle);
+       'index_medium', n_medium, 'index_particle', n_particle, 'Nmax', Nmax);
     beam_scat_union = T_union * beam_inc;
 
     %%##

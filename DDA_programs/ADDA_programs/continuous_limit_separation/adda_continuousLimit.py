@@ -313,6 +313,32 @@ def GenerateGeomFile(singleShape_info, singleShape_width, separation):
         combinedFile.write("\n");                                       #Another line of spacing to make file easier to read
     combinedFile.close();
 
+def GenerateGeomFile_circular(singleShape_info, singleShape_width, radial_distance, particle_number):
+    """
+    . Creates a combination of N particles in a ring
+    . separation = Number of lattice spacings between the two particles, where 0=exactly touching
+
+    . Note; The comments at the start of the shape.geom file should be removed before using this function to read this file
+    """
+    #########
+    ## REWRITE THIS TO WORK WITH N PARTICLES IN A RING ----> MAYBE TRY CREATE BEAM FROM SUM OF PLANE WAVES --> GET FORCES OUT
+    #########
+    #Overwrite shapeCombined.geom file
+    combinedFile = open("shapeCombined.geom","w");
+    combinedFile.write("Nmat=2\n");
+    for n in range(0,2):                                                #For each shape
+        for dipole_pos in singleShape_info:
+            for pos_component_index in range(0,len(dipole_pos)):
+                pos_component = dipole_pos[pos_component_index];
+                component_string_value = str(pos_component);
+                if(pos_component_index == 0):                           #Shift separation in X direction
+                    component_string_value = str(pos_component +n*(singleShape_width +separation));
+                combinedFile.write(component_string_value+" ");
+            combinedFile.write(str(n+1));                               #To specify which particle this dipole belongs to
+            combinedFile.write("\n");
+        combinedFile.write("\n");                                       #Another line of spacing to make file easier to read
+    combinedFile.close();
+
 def PlotData(plot_data, wavelength, dipole_size):
     """
     . Plots data about force experienced at different separations, for 2 different particles
@@ -322,8 +348,8 @@ def PlotData(plot_data, wavelength, dipole_size):
     particle_1_data = plot_data[:,1];
     particle_2_data = plot_data[:,2];
 
-    plt.plot(particle_separation, particle_1_data, label ="L λ= "+str(wavelength)+"μm");
-    plt.plot(particle_separation, particle_2_data, label ="R λ= "+str(wavelength)+"μm");
+    plt.plot(particle_separation, particle_1_data, label ="LHP λ= "+str(wavelength)+"μm");
+    #plt.plot(particle_separation, particle_2_data, label ="RHP λ= "+str(wavelength)+"μm");
     #plt.show();
 
 def main():
@@ -336,27 +362,28 @@ def main():
     print("Program Started");
     input_file = "shapeCombined.geom";  #Shape used in DDA (for both particles)
     output_folder = "output_data";      #Folder where results are placed
-    iterations = 50;                   #How many lattice spacings of separation to do
-    separation_step = 1;                #How many dipoles the space increases by each cycle
+    iterations = 100;                   #How many lattice spacings of separation to do
+    separation_step = 5;                #How many dipoles the space increases by each cycle
 
     dipoles_per_lambda = 15;
 
     plot_data = [];     #Stores [res_force_xORy_particle1, res_force_xORy_particle2] for each separation, the first element being at 0 separation
-    CreateSingleParticleGeom("cube");
+    #CreateSingleParticleGeom("cube");
     singleShape_info, singleShape_info_width = PullSingleParticleGeom("shape.geom");    #Pull this data into a list once then use for all further operations
 
     #Shapes start next to eachother, then move further apart
     print("Calculations started...");
     print("single shape X-width= ",singleShape_info_width);
     plt.figure();
-    for wavelength_factor in range(1, 10):
-        wavelength    = 1.0*wavelength_factor;   #In μm
+    for wavelength_factor in range(1, 2):
+        wavelength    = 1.064;#*wavelength_factor*0.5;#1.0*wavelength_factor;   #In μm
         for iter in range(0, iterations):
             if(iter % 10 == 0):
                 print("     Iter "+str(iter)+"/"+str(iterations));
             GenerateGeomFile(singleShape_info, singleShape_info_width, iter*separation_step);
 
             dipole_size = wavelength/dipoles_per_lambda;
+            print("Dipole Size= ",dipole_size);
             RunAdda("shapeCombined.geom", dipoles_per_lambda, 1.5, 0, wavelength, "output_data");
 
             paramDict = PullAddaData_Parameters("output_data/log");
@@ -381,7 +408,7 @@ def main():
         PlotData(plot_data, wavelength, dipole_size);
         plot_data = [];
     plt.xlabel("Separation of particles in μm");
-    plt.ylabel("X Force");
+    plt.ylabel("X Force (10^-13N)");
     plt.title("X Force between 2 particles, dpl= "+str(dipoles_per_lambda));
     plt.legend();
     plt.show();

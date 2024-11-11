@@ -1,0 +1,36 @@
+============
+** BASE VALUES USED FOR NMAX=9,10,12 SHOWN BELOW HERE
+============
+
+elseif(mode == "SingleParticle_Variations")
+        disp("Performing SingleParticle_Variations");
+        Nmax            = 9;
+        n_medium_base   = 1.0;
+        n_particle      = 1.55;         %calcite~1.55
+        wavelength0_base= 1064e-9;      %Vacuum wavelength
+        laguerreOrder   = 8;
+        radius_base     = (1.0e-6)/2.0; %Diameter 1e-6
+        %particle_dist   = 1.1e-6;
+        space_data = [ ...
+            -2.2e-6, 2.2e-6, 5; ...
+            -2.2e-6, 2.2e-6, 5; ...
+            -1.0e-6, 1.0e-6, 3 ...
+        ];
+        
+        N = 2;
+        %(1) Vary radius
+        for var_iter = -N:N  %-N
+            radius = radius_base +var_iter*0.1*radius_base;
+            SingleParticle_Force_3dSpace("RAD="+var_iter, Nmax, laguerreOrder, n_medium_base, n_particle, wavelength0_base, radius, space_data, robot);
+        end
+        %(2) Vary n_medium
+        for var_iter = -N:N 
+            n_medium = n_medium_base +var_iter*0.1;
+            SingleParticle_Force_3dSpace("N_MEDIUM="+var_iter, Nmax, laguerreOrder, n_medium, n_particle, wavelength0_base, radius_base, space_data, robot);
+        end
+        %(3) Vary wavelength
+        for var_iter = -N:N
+            wavelength0 = wavelength0_base +var_iter*0.1*wavelength0_base;
+            SingleParticle_Force_3dSpace("LAMBDA="+var_iter, Nmax, laguerreOrder, n_medium_base, n_particle, wavelength0, radius_base, space_data, robot);
+        end
+    end
