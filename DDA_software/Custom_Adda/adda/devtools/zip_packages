@@ -1,0 +1,20 @@
+#!/bin/bash
+# Assumes that a new tag in git has been allready created.
+# Then creates the ADDA package excluding all git and GitHub auxiliary files entries. Win64 files are zipped separately.
+# First obligatory argument - name of version (like 1.4.0)
+# Second (optional) argument - prefix for archive names (usually the folder relative to ./../ to place archives into)
+# Can be run on any system producing consistent (the same) end-of-line styles (LF for main package, and CRLF for win64)
+
+#Test arguments
+if [ $# -eq 0 ]; then
+  echo "ERROR: requires at least 1 argument"
+  exit 1
+fi
+ 
+cd ..
+# produce win64 archive. Correct line endings (CRLF) are set by .gitattributes. Otherwise, change:
+# "git" -> "git -c core.autocrlf=true -c core.eol=crlf" 
+git archive -o "${2}adda-$1-win64.zip" v$1:win64 --prefix adda-$1/win64/
+ 
+# produce main source archive (with LF line endings) - exactly as produced by GitHub
+git -c core.autocrlf=false -c core.eol=lf archive -o "${2}adda-${1}.zip" v$1 --prefix adda-$1/

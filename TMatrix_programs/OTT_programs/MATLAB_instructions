@@ -1,0 +1,2 @@
+. matlab exe found in home/user/MATLAB/R... install location
+. Run with "./matlab -softwareopengl" to allow graph drawing to occur (if no graphics card)

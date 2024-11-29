@@ -12,6 +12,16 @@ from functools import partial
 import sys
 from make_animation_and_quiver import make_quiver_plot
 
+"""
+(1) Need to test T-avg force calc works like ADDA's
+    -> Bring ADDA plane wave into here
+    -> Make visualisation functions easier to use
+    -> Compare forces here to ADDA
+(2) Get Laguerre working fully
+(3) Try trap particle in ADDA
+(4) Project would be novel if trapped well, compared forces for assessement on close particle validty, and had extended ADDA software
+"""
+
 def PullAddaData_Parameters(filename):
     """
     . Pulls other miscellaneous parameters from the log file adda generates
@@ -210,7 +220,7 @@ def PullAddaData_DipolePosPolarisations(filename):
     .filename = name of file storing dipole pos+polarisation data, with the correct extension
 
     Will format the output as such;
-    [x,y,x, Px_re,Px_im,Py_re,Py_im,Pz_re,Pz_im] for its position and direction respecitively
+    [x,y,x, Px_re,Px_im,Py_re,Py_im,Pz_re,Pz_im] for its position and direction respectively
 
     .** Note; Assumes the file is in the same folder as this python script
     .** Note; These are in RAW values (not relative)
@@ -263,10 +273,6 @@ def PullAddaData_DipolePosEInternal(filename):
     [x,y,x, Ex_re,Ex_im,Ey_re,Ey_im,Ez_re,Ez_im] for its position and direction respecitively
 
     .** Note; These are in RAW values (not relative, in micrometers and possibly CGS too)
-
-    ###################################
-    ## CONVERT THIS TO POLARISATIONS ##
-    ###################################
     """
     #Load file
     file = open(filename, "r");
@@ -355,31 +361,6 @@ def PullSingleParticleGeom(filename):
     singleFile.close();
     return singleShape_info, singleShape_info_width;
 
-def GenerateGeomFile_circular(singleShape_info, singleShape_width, radial_distance, particle_number):
-    """
-    . Creates a combination of N particles in a ring
-    . separation = Number of lattice spacings between the two particles, where 0=exactly touching
-
-    . Note; The comments at the start of the shape.geom file should be removed before using this function to read this file
-    """
-    #########
-    ## REWRITE THIS TO WORK WITH N PARTICLES IN A RING ----> MAYBE TRY CREATE BEAM FROM SUM OF PLANE WAVES --> GET FORCES OUT
-    #########
-    #Overwrite shapeCombined.geom file
-    combinedFile = open("shapeCombined.geom","w");
-    combinedFile.write("Nmat=2\n");
-    for n in range(0,2):                                                #For each shape
-        for dipole_pos in singleShape_info:
-            for pos_component_index in range(0,len(dipole_pos)):
-                pos_component = dipole_pos[pos_component_index];
-                component_string_value = str(pos_component);
-                if(pos_component_index == 0):                           #Shift separation in X direction
-                    component_string_value = str(pos_component +n*(singleShape_width +separation));
-                combinedFile.write(component_string_value+" ");
-            combinedFile.write(str(n+1));                               #To specify which particle this dipole belongs to
-            combinedFile.write("\n");
-        combinedFile.write("\n");                                       #Another line of spacing to make file easier to read
-    combinedFile.close();
 
 def Calculate_FarField_Grid(posPolarisations, exclusionRadius, space_data, k, permitivity_free):
     """
@@ -471,7 +452,7 @@ def Plot_2D_Array(slice_type, format, title_label, dataset, space_data, subplot_
                     elif(format == "Z"):
                         data[j_ind, i_ind] = np.sqrt(np.sum(np.power(mod2_vector[2], 2)));
                     else:
-                        print("Invalid format");
+                        print("Invalid format: ",format);
 
             #Plot
             #print(list(mpl.colormaps))
@@ -504,7 +485,7 @@ def Plot_2D_Array(slice_type, format, title_label, dataset, space_data, subplot_
                         elif(format == "Z"):
                             data[i_ind, k_ind] = np.sqrt(np.sum(np.power(mod2_vector[2], 2)));
                         else:
-                            print("Invalid format");
+                            print("Invalid format: ",format);
 
         #Plot
         #print(list(mpl.colormaps))
@@ -555,12 +536,12 @@ def Generate_Beam(beam_spec, space_data):
         (space_data[1][1] -space_data[1][0])/(space_data[1][2]-1), 
         0
     ];
-    #BODGE -> REDO FOR NICE SOL FOR XYZ
+    #REDO FOR NICE SOL FOR XYZ
     if(space_data[2][2] > 1):  #If want to measure for a single Z
         space_jump[2] = (space_data[2][1] -space_data[2][0])/(space_data[2][2]-1);
     else:
         space_jump[2] = 0.0;
-    #BODGE -> REDO FOR NICE SOL FOR XYZ
+    #REDO FOR NICE SOL FOR XYZ
     
 
     for k_ind in range(0, space_data[2][2]):
@@ -579,12 +560,33 @@ def Generate_Beam(beam_spec, space_data):
                 elif(beam_spec[0] == "laguerreGaussian"):
                     #beam_spec = [beam_type, wavelength, azi, radial, alpha, beta, w_0]
                     E_field = Get_E_LaguerreGaussian_Beam(pos, beam_spec[1], beam_spec[2], beam_spec[3], beam_spec[4], beam_spec[5], beam_spec[6]);
+                elif(beam_spec[0] == "planeWave"):
+                    #beam_spec = [beam_type, wavelength, azi, radial, alpha, beta, w_0]
+                    E_field = Get_E_PlaneWave_Beam(pos, beam_spec[1], beam_spec[2], beam_spec[3]);
                 else:
                     print("Invalid beam type");
                 field_data[k_ind][j_ind].append(E_field);
     return field_data;
 
-def Get_E_LaguerreGaussian_Beam(pos, wavelength, radial, azimuthal, alpha, beta, w_0, showVariables=False):
+def Get_E_PlaneWave_Beam(pos, wavelength, beam_center, polarisation):
+    """
+    . Returns list for electric field vector components at a position, given by the plane wave beam equation (exact format copied from ADDA for comparison)
+    . Polarisation either "X" or "Y" for now
+    """
+    #Raw ADDA; vSubtr(DipoleCoord+j,beam_center,r1);
+    #          ctemp=imExp(WaveNum*DotProd(r1,prop));
+    k = 2.0*math.pi/wavelength;
+    r1 = np.array(pos)-np.array(beam_center);
+    ctemp=cmath.exp(1j*k*r1[2]);    #We assume here that the 'prop' direction (for wavevector) is always in Z direction for simplicity
+    if(polarisation=="X"):
+        return [ctemp.real, 0.0, 0.0];
+    elif(polarisation=="Y"):
+        return [0.0, ctemp.real, 0.0];
+    else:
+        print("Invalid polarisation for plane wave: "+str(polarisation));
+        return [0.0, 0.0, 0.0];
+
+def Get_E_LaguerreGaussian_Beam(pos, wavelength, radial, azimuthal, alpha, beta, w_0, showVariables=True):
     """
     . pos = [x,y,z] point to get E at
     . radial/azimuthal = 2 parameters for laguerre beam, spin and orbital angular momentum order
@@ -650,7 +652,7 @@ def Get_E_LaguerreGaussian_Beam(pos, wavelength, radial, azimuthal, alpha, beta,
     E_Z_Comp = integrate.quad(lambda x: E_vector_component(2, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
 
     #integrate.quad returns [value, error] => want to pull just the value
-    return [E_X_Comp[0], E_Y_Comp[0], E_Z_Comp[0]];
+    return [E_X_Comp[0].real, E_Y_Comp[0].real, E_Z_Comp[0].real];
 
 def Sweep_Beam_Generation(space_data, wavelength):
     """
@@ -690,10 +692,22 @@ def Calculate_T_Averaged_Dipole_PosForce(dipole_size, beam_spec):
     print("Calculating time-averaged forces for "+beam_spec[0]);
     #Pull internal E fields from ADDA
     posEInternal_set = PullAddaData_DipolePosEInternal("output_data/IntField-Y");     #Pulled directly from data
-    #####
-    ## CORRECT THIS VALUE
-    #####
-    polarisability   = 1.0; ##### SHOULD BE A SINGLE VALUE ##### -> IF VARIES ACROSS PARTICLE CAN PULL FOR EACH
+    
+    #LDR is used in ADDA  y default, chosen with -pol <...>
+    #LDR formulation for isotropic material (avoid matrices/tensors)
+    #https://arxiv.org/pdf/astro-ph/0311304
+    wavelength = beam_spec[1];
+    n  = 1.0;   #Refractive index   ############ NEEDS TO BE PARSED IN ###############
+    wave_number = 2.0*math.pi/wavelength;
+    alpha_cm = ( (3.0*pow(dipole_size,3))/(4.0*math.pi) )*( (n**2 -1)/(n**2 +2) ); ##### CHECK UNITS --> SHOULD BE CGS TO MATCH ADDA I THINK #####
+    b1 = -1.8915316;
+    b2 =  0.1648469;
+    b3 = -1.7700004;
+    #########################
+    ## CORRECT THESE VALUES ---> FOR LAGUERRE CIRUCLAR POALRISATION NEEDED
+    #########################
+    S  = 1.0; #X or Y linearly polarised
+    polarisability = alpha_cm / (1.0 +(alpha_cm/pow(dipole_size,3))*( (b1 +pow(n,2)*b2 +pow(n,2)*b3*S)*(pow(wave_number*dipole_size,2)) -(2.0/3.0)*1j*(pow(wave_number*dipole_size,3)) ));
 
     #Find force for each dipole
     posForce_set = [];
@@ -707,13 +721,15 @@ def Calculate_T_Averaged_Dipole_PosForce(dipole_size, beam_spec):
             #F   =       1/2 Re(polarisability*Grad( |E|^2 ))
             #F_i = SUM_j 1/2 Re(polarisability*E_j*del_i*E_j_conj)
             force_comp = 0.0 +0j;
-            ####
-            ## SHOULD BE CONSIDERING INTERNAL FORCES --> BUT NEED DERIVATIVES => NOT GOOD ENOUGH TO CONSIDER THESE INDIVIDUAL POSITIONS, NEED TO BE ABLE TO PROBE THE CONTINUUM TO GET DERIVATIVE
-            ####
             for j in range(0,3):
                 ####
                 ## MAKE REQUEST CORRECT BEAM => APPLICABLE TO ANY BEAM TYPE ##
                 ####
+                ##
+                ## ---> This wants incident beam at dipole positions?
+                ##      --> This is absoltely fine if true
+                ##  ---> Problem is the gradient is needed too ---> could assume bad gradient between dipole positions, OR just assume beam is also replicated fully in here, the same as is in ADDA
+                ##
                 #pos, wavelength, radial, azimuthal, alpha, beta, w_0
                 E_partial = partial( Get_E_LaguerreGaussian_Beam, wavelength=beam_spec[1], radial=beam_spec[2], azimuthal=beam_spec[3], alpha=beam_spec[4], beta=beam_spec[5], w_0=beam_spec[6] );
                 E_comp_partial      = E_partial( posEInternal[0:3] )[j];                            #Complex valued
@@ -730,9 +746,6 @@ def Calculate_T_Averaged_Dipole_PosForce(dipole_size, beam_spec):
     return posForce_set;
 
 def gradient(function, pos, offset_component):
-    ##
-    ## THIS IS SINGLE, NOT CENTRAL DIFF --> SWITCH IT
-    ##
     pos = np.array(pos);
     pos_offset = np.array([0.0, 0.0, 0.0]);
     pos_offset[offset_component] = sys.float_info.epsilon;    #Accuracy between (0,1) -> closer to 0 => more accuracy
@@ -799,7 +812,7 @@ def Calculate_NearField_Point(r, beam_spec, posPolarisations, permitivity_free):
         E_interaction += np.matmul(Get_GreensTensor(r, dip_positions[dip_ind], beam_spec[1]),dip_polarisations[dip_ind]);
     E_interaction = E_interaction*(pow(k,2)/(permitivity_free));
     #####
-    ## INTERACTION TERM IS LOOKING VERY LARGE
+    ## INTERACTION TERM IS LOOKING VERY LARGE -> CHECK ACCURACY
     #####
     return E_incident + E_interaction;
 
@@ -824,6 +837,7 @@ def main():
     dipoles_per_lambda  = 15;               #Number of dipoles to have within a certain length
     dipole_size = wavelength/dipoles_per_lambda;
     permitivity_free = 8.85*pow(10,-12);
+    k = 2.0*math.pi/wavelength;
 
     space_data_XY = [  #Specifies where to sample far-field grid -> assumes particle centred at origin (bounding box centred)
         [-3.5, 3.5, 41],  # In μm, [X_start, X_end, X_samples]
@@ -837,6 +851,10 @@ def main():
         [-3.5, 3.5, 41]  # "" ""
     ];
 
+    ########################################################################
+    ### SPLIT THIS INTO OTT STYLE OPTION SELECTOR, NOT ONE BIG MESSY LIST ##
+    ########################################################################
+
     #Shapes start next to eachother, then move further apart
     print("Calculations started...");
 
@@ -847,25 +865,29 @@ def main():
     RunAdda(input_shape, input_beam, dipoles_per_lambda, 1.5, 0, wavelength, output_folder);
 
     #Get polarisations out
-    paramDict = PullAddaData_Parameters("output_data/log");
+    paramDict = PullAddaData_Parameters("log_laguerre08_realPart"); #output_data/log
+    wavelength = paramDict["lambda"];   #Matches wavelength used by ADDA
     posPolarisations_X = PullAddaData_DipolePosForces("output_data/DipPol-X");
-    posPolarisations_Y = PullAddaData_DipolePosForces("output_data/DipPol-Y");
+    #posPolarisations_Y = PullAddaData_DipolePosForces("DipPol-Y_laguerre08_realPart");   #output_data/DipPol-Y
+    posPolarisations_Y = PullAddaData_DipolePosForces("DipPol-Y_laguerre08_imagPart");
 
-    laguerre_beam_spec = ["laguerreGaussian",wavelength,0,8, 0.4*pow(10,-8)*(1.0+1j), 0.4*pow(10,-8)*(1.0-1j), 0.6*wavelength];
+    laguerre_beam_spec  = ["laguerreGaussian",wavelength,0,8, 0.4*pow(10,-8)*(1.0+1j), 0.4*pow(10,-8)*(1.0-1j), 0.6*wavelength];
+    planeWave_beam_spec = ["planeWave",wavelength, [0,0,0], "X"];
+    print("Wavelength used= ",wavelength);
 
     #-------------------
     # Force Calculation
     #-------------------
-    E_near_field = Calculate_NearField_Point(np.array(posPolarisations_X[0])[0:3], laguerre_beam_spec, posPolarisations_X, permitivity_free);
-    print("E_near_field= "+str(E_near_field));
+    #E_near_field = Calculate_NearField_Point(np.array(posPolarisations_X[0])[0:3], laguerre_beam_spec, posPolarisations_X, permitivity_free);
+    #print("E_near_field= "+str(E_near_field));
     #beam_posForce_set = Calculate_T_Averaged_Dipole_PosForce(dipole_size, laguerre_beam_spec);
     #make_quiver_plot(beam_posForce_set, dipole_size, dipole_size, dipole_size, should_normalise_arrows=True);  #### MAY NEED TO SWAP AXES, MEHSGRID PROBLEM POSSIBLY ###
 
     #-----------------
     # E_Incident Plot
     #-----------------
-    field_data_XY = Generate_Beam(laguerre_beam_spec, space_data_XY);
-    field_data_ZX = Generate_Beam(laguerre_beam_spec, space_data_ZX);
+    field_data_XY = Generate_Beam(planeWave_beam_spec, space_data_XY);   #laguerre_beam_spec
+    field_data_ZX = Generate_Beam(planeWave_beam_spec, space_data_ZX);
     Plot_2D_Array("Z", "norm", "E norm", field_data_XY, space_data_XY);
     plt.show();
     Plot_2D_Array("Y", "norm", "E norm", field_data_ZX, space_data_ZX);
@@ -873,6 +895,46 @@ def main():
     #Sweep_Beam_Generation(space_data, wavelength);
     #plt.show();
 
+
+    ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ##
+    ## Testing ADDA Plane-Wave Implementation ##
+    ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ##
+    #(1) Calculate incident field at each dipole and compare
+    print("---Performing ADDA Plane-Wave Test...");
+    pythonCalc_posFields = [];
+    for dipole in posPolarisations_X:
+        pythonCalc_posField = [dipole[0], dipole[1], dipole[2]];    #Consider same position
+        pythonCalc_incidentField = Get_E_PlaneWave_Beam(dipole[0:3], wavelength, [0.0, 0.0, 0.0], "X");
+        pythonCalc_posField.append( np.sum(np.power(np.array(pythonCalc_incidentField), 2)) );    #|E|^2
+        pythonCalc_posField.append(pythonCalc_incidentField[0]);    #Ex
+        pythonCalc_posField.append(pythonCalc_incidentField[1]);    #Ey
+        pythonCalc_posField.append(pythonCalc_incidentField[2]);    #Ez
+        pythonCalc_posFields.append(pythonCalc_posField);           #Add to main set
+    #(2) Calulate incident + scattered field at each dipole and compare
+    #pass
+    #(3) Calculate t-averaged force at each dipole and compare
+    #pass
+    print("     ADDA Pulled Values= ",posPolarisations_X);  #### NEEDS TO COMPARE TO INCIDENT FIELD ####
+    print("");
+    print("");
+    print("     Python Calc Values= ",pythonCalc_posFields);
+    print("---ADDA Plane-Wave Test Finished");
+
+    
+    #------------------------------
+    # E_Far-Field Plot -- Laguerre
+    #------------------------------
+    exclusionRadius = 16*dipole_size;   #16x16x16 sphere used
+    #print("X Polarisations");
+    #E_far_field_X = Calculate_FarField_Grid(posPolarisations_Y, exclusionRadius, space_data, k, permitivity_free);    #Get 3D array of far-field E
+    print("Y Polarisations");
+    #E_far_field_Y = Calculate_FarField_Grid(posPolarisations_Y, exclusionRadius, space_data_XY, k, permitivity_free);    #Get 3D array of far-field E
+    #Plot this grid of values
+    #Plot_2D_Array("Z", "norm", "|E|, "+input_shape+", beam="+input_beam+", X polarisation", E_far_field_X, space_data);
+    #Plot_2D_Array("Z", "norm", "|E|, "+input_shape+", beam="+input_beam+", Y polarisation", E_far_field_Y, space_data_XY);
+    #plt.show();
+
+    
     #------------------
     # E_Far-Field Plot
     #------------------
@@ -898,98 +960,3 @@ def main():
     print("Program ended");
 
 main();
-
-
-
-"""
-=====
-TODO
-=====
-#####
-Need to make polarisability in NEAR FIELD the correct value
-#####
-(0) Pull out E equation for plane wave used by ADDA to then do comparison
-(1) Check internal field at dipole calculated here matches ADDA version, plane wave case    <----- INTERACTION TERM TOO LARGE
-(2) Check forces calculated here match ADDA version, plane wave case
-(3) Put Laguerre into ADDA, try to do the same things (polarisation and force calc) for this and compare to OTT
-(4) Try and trap in ADDA
-"""
-
-
-
-
-
-
-
-"""
-def Get_E_LaguerreGaussian_Beam(pos, wavelength, radial, azimuthal):
-    
-    #. pos = [x,y,z] point to get E at
-    #. radial/azimuthal = 2 parameters for laguerre beam, spin and orbital angular momentum order
-    #    - Called m & n in paper "Gaussian, Hermite-Gaussian, and Laguerre-Gaussian beams: A primer"
-    
-    z   = pos[2];
-    phi = math.atan2(pos[1],pos[0]); ### CHECK MAKE SURE IS CORRECT -> principle angle ###
-    rho = cmath.sqrt( pow(pos[0],2) + pow(pos[1],2) );
-
-    l     = radial;#azimuthal;#8.0;     #Orbital angualr momentum number
-    p     = azimuthal;#radial;   #0.0;     #Spin angular momentum number
-    k     = 2.0*math.pi/wavelength;
-    w_0   = 4.0*wavelength; #Beam waist, may not be needed
-    z_R   = k*pow(w_0, 2)/2.0;     #Rayleigh factor
-    alpha = 1.0;   #Constant used in X E mag
-    beta  = 1.0;   #COnstant used in Y E mag
-    C     = 1.0;    #Constant used in magnitude for u_l_p -> no further description given#
-
-    print("");
-    print("=====");
-    print("Variables");
-    print("=====");
-    print("l= "+str(l));
-    print("p= "+str(p));
-    print("k= "+str(k));
-    print("w_0= "+str(w_0));
-    print("z_R= "+str(z_R));
-    print("alpha= "+str(alpha));
-    print("beta= "+str(beta));
-    print("C= "+str(C));
-    print("");
-    
-    def w(zeta):
-        return w_0*cmath.sqrt(1+pow(zeta,2));
-    def L_l_p(value):
-        #####
-        ## ONLY WORKS FOR m=0 --> radial part=0
-        ##      --> ASSUMED 0th derivative
-        #####
-        #return ( (cmath.exp(value)*pow(value,-p))/(1.0) )*( cmath.exp(-value)*pow(value, p+l) );   ##--> ONLY WORKS FOR M=0, + MAY ALSO BE WRONG
-        legendre_matrix = sp.clpmn(l,p,value);
-        return legendre_matrix[0][l][p];
-        ####
-        ## SEEMS LIKE ORDER is [arbitrary][l][p]    <--- ARBITRARY TO ACCOUNT FOR POSSIBLE MATRICES OF VALUE VALUEs
-        ####
-    def u_l_p():
-        # From same paper
-        return ( (C)/cmath.sqrt(1 +(pow(z,2)/pow(z_R,2))) )*pow( (rho*cmath.sqrt(2))/(w(z)), l)*(L_l_p( (2.0*pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-1j*k*pow(rho,2)*z)/(2.0*(pow(z,2)+pow(z_R,2))) ))*(cmath.exp(1j*l*phi))*(cmath.exp( (1j*(2.0*p +l+1))*(cmath.atan( (z)/(z_R) )) ));
-    def E(kappa):
-        return u_l_p()*cmath.exp( (-k*pow(kappa,2)*z_R)/(2.0*(pow(k,2) - pow(kappa,2))) )*pow( (pow(kappa,2))/(pow(k,2) - pow(kappa,2)), (2.0*p+l+1.0)/(2) )*cmath.sqrt( (pow(k,2))/(pow(k,2) - pow(kappa,2)) );
-
-    def E_vector_component(component, kappa):
-        #Full vector version
-        #E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( np.array([alpha, beta, 0.0])*sp.jv(l, kappa*rho) + np.array([0.0, 0.0, 1.0])*( (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) ) );
-        #sp.jv(l, x) = Bessel function of 1st kind, order l
-        if(component == 0):     #X comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( alpha*sp.jv(l, kappa*rho) );
-        elif(component == 1):   #Y comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( beta*sp.jv(l, kappa*rho) );
-        elif(component == 2):   #Z comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*(  (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) );
-        else:
-            return 0.0;
-
-    E_X_Comp = integrate.quad(lambda x: E_vector_component(0, x), 0.0, k);
-    E_Y_Comp = integrate.quad(lambda x: E_vector_component(1, x), 0.0, k);
-    E_Z_Comp = integrate.quad(lambda x: E_vector_component(2, x), 0.0, k);
-
-    return [E_X_Comp, E_Y_Comp, E_Z_Comp];
-"""

@@ -67,17 +67,17 @@ Total number of iterations: 16
 Total number of matrix-vector products: 18
 Total planes of E field calculation (each 180 points): 2
 
-Total wall time:     0.0132
+Total wall time:     0.0114
 --Everything below is processor times--
-Total time:          0.0132
-  Initialization time: 0.0096
+Total time:          0.0114
+  Initialization time: 0.0092
     init interaction:    0.0000
-    init Dmatrix:        0.0004
-    FFT setup:           0.0090
-    make particle:       0.0001
-  Internal fields:     0.0006
-    one solution:        0.0004
-      matvec products:     0.0003
+    init Dmatrix:        0.0003
+    FFT setup:           0.0088
+    make particle:       0.0000
+  Internal fields:     0.0004
+    one solution:        0.0002
+      matvec products:     0.0002
       incident beam:       0.0000
       init solver:         0.0000
       one iteration:       0.0000
@@ -85,5 +85,5 @@ Total time:          0.0132
   Scattered fields:    0.0002
     one plane:           0.0001
   Other sc.quantities: 0.0001
-File I/O:            0.0027
+File I/O:            0.0015
 Integration:         0.0000
