@@ -168,14 +168,7 @@ void InitBeam(void)
 		case B_LAGUERRE:
 			l=beam_pars[0];
 			p=beam_pars[1];
-			vorticity=p;
-			//####################################
-			//## POSSIBLY CHANGE VORTICITY HERE ##
-			//####################################
-			//if (IFROOT) {
-			//	tmp_str="Laguerre-Gaussian formulation";
-			//	break;
-			//}
+			vorticity=p;	//## Possible vorticity problems here -> vorticity not tested ##
 			return;
 		case B_LMINUS:
 		case B_DAVIS3:
@@ -332,7 +325,24 @@ void InitBeam(void)
 
 //======================================================================================================================
 
-
+int factorial(int value) {
+	/*
+	. Returns the factorial of a positive integer
+	*/
+	int break_condition = 50;	//Break after 50 loops to prevent inf. loop, factorials deal with here (for Laguerre Beam) never more than ~10
+	int factorial_value = 1;
+	if(value > 0) {
+		//Returns 1 if 0 or less
+		while(value > 0) {
+			factorial_value *= value;
+			value = value-1;
+			break_condition -= 1;
+			if(break_condition < 0) {
+				break;}
+		}
+	}
+	return factorial_value;
+}
 doublecomplex integrate_simpsons_rule(double limit_lower, double limit_upper, int samples, doublecomplex (*cFunction)(double, int, double, double, double, double, int, int, double, double, doublecomplex, doublecomplex), int component, double rho, double phi, double z, double k, int l, int p, double z_R, double w0, doublecomplex alpha, doublecomplex beta) {
 	/*
 	. Evaluates an integral using simpson's rule
@@ -374,30 +384,21 @@ doublecomplex laguerre_getParam_Llp(doublecomplex value, int l, int p) {
 		to values l=0, p=8
 	****************************************************************************************
 	*/
-	doublecomplex L = 0.0 +0.0*I;	//Generalised implementation ### UNFINISHED PLACEHOLDER ###
+	//doublecomplex L = 0.0 +0.0*I;	//Generalised implementation ### UNFINISHED PLACEHOLDER ###
 	doublecomplex L_0_8 = ( (6435.0)*cpow(value,8) -(12012.0)*cpow(value,6) +(6930.0)*cpow(value,4) -(1260.0)*cpow(value,2) +(35.0) )/128.0;
 	return L_0_8;
 }
 doublecomplex laguerre_getParam_Bessel(doublecomplex value, int l) {
 	/*
 	. Get bessel function
-	#####################################################
-	## MAY ALSO NOT BE CORRECT FORM FOR COMPLEX VALUES ##
-	#####################################################
 	*/
-	int terms = 6;	//# of terms to take in Taylor series
+	int terms = 6;	//# of terms to take in Taylor series -> 6 usually plenty sufficient
 	doublecomplex bessel_value = 0.0 +0.0*I;
 	for(int i_ind=0; i_ind<terms; i_ind++) {
 		doublecomplex set_1 = (pow(-1,i_ind))/(factorial(i_ind)*factorial(i_ind+l));
 		doublecomplex set_2 = cpow( (value/2.0), (2*i_ind +l));
 		bessel_value += set_1*set_2;
 	}
-
-	//###############################
-	//## VALUE SEEMS EXTREMELY LOW ##
-	//###############################
-	//bessel_value = 1.0 +0.0*I;
-	//printf("bessel= %e, %e \n", creal(bessel_value), cimag(bessel_value));
 	return bessel_value;
 }
 doublecomplex laguerre_getParam_C(int l, int p) {
@@ -405,9 +406,6 @@ doublecomplex laguerre_getParam_C(int l, int p) {
 	. Get normalisation constant C, used in u_l_p function
 	. From “Gaussian Beams In Optics of Course” paper
 	*/
-	//#####
-	//## DIFFERENT FORMULATIONS MAY HAVE COMPLEX PARTS --> HENCE BETTER TO ASSUME COMPLEX
-	//#####
 	//(factorial(p))*sqrt( (2)/(PI*factorial(p)*( factorial( abs(l) + p ) )) );
 	doublecomplex C_formualtion = (factorial(p))*sqrt( (2)/(PI*factorial(p)*( factorial( abs(l) + p ) )) );
 	return C_formualtion;
@@ -416,16 +414,13 @@ doublecomplex laguerre_getParam_Ulp(doublecomplex C, int l, int p, double rho, d
 	/*
 	. Get u_l_p, which describes behaviour of laguerre-gaussian beam
 	*/
-	//#####
-	//## SOME INLINE COMPLEX VALUES HERE --> THINK IS FINE BUT WORTH CHECKING
-	//#####
 	doublecomplex set_1 = (C)/csqrt(1 +((z*z)/(z_R*z_R)));
 	doublecomplex set_2 = cpow( (rho*csqrt(2))/(laguerre_getParam_w(z, w0)), l);
 	doublecomplex set_3 = laguerre_getParam_Llp((2.0*(rho*rho))/(cpow(laguerre_getParam_w(z, w0),2)), l, p);
-	doublecomplex set_4 = imExp( (-(rho*rho))/(cpow(laguerre_getParam_w(z, w0),2)) );	//<------ This term gets very small, ends up setting E to 0
-	doublecomplex set_5 = imExp( (-I*k*(rho*rho)*z)/(2.0*((z*z)+(z_R*z_R))) );
-	doublecomplex set_6 = imExp(I*l*phi);
-	doublecomplex set_7 = imExp( (I*(2.0*p +l+1))*(atan( (z)/(z_R) )) );
+	doublecomplex set_4 = cexp( (-(rho*rho))/(cpow(laguerre_getParam_w(z, w0),2)) );	//<------ This term gets very small, ends up setting E to 0
+	doublecomplex set_5 = cexp( (-I*k*(rho*rho)*z)/(2.0*((z*z)+(z_R*z_R))) );
+	doublecomplex set_6 = cexp(I*l*phi);
+	doublecomplex set_7 = cexp( (I*(2.0*p +l+1))*(atan( (z)/(z_R) )) );
 	return set_1*set_2*set_3*set_4*set_5*set_6*set_7;
 }
 doublecomplex laguerre_getParam_E(double kappa, double rho, double phi, double z, double k, int l, int p, double z_R, double w0) {
@@ -434,7 +429,7 @@ doublecomplex laguerre_getParam_E(double kappa, double rho, double phi, double z
 	*/
 	doublecomplex C = laguerre_getParam_C(l, p);//1.0 +0.0*I;
 	doublecomplex set_1 = laguerre_getParam_Ulp(C, l, p, rho, phi, k, z, z_R, w0);
-	doublecomplex set_2 = imExp( (-k*(kappa*kappa)*z_R)/(2.0*((k*k) - (kappa*kappa))) );
+	doublecomplex set_2 = cexp( (-k*(kappa*kappa)*z_R)/(2.0*((k*k) - (kappa*kappa))) );
 	doublecomplex set_3 = cpow( ((kappa*kappa))/((k*k) - (kappa*kappa)), (2.0*p+l+1.0)/(2.0) );
 	doublecomplex set_4 = csqrt( ((k*k))/((k*k) - (kappa*kappa)) );
 	doublecomplex set_5 = set_1*set_2*set_3*set_4;
@@ -446,53 +441,31 @@ doublecomplex laguerre_getParam_E_component(double kappa, int component, double 
 	*/
 	doublecomplex E = laguerre_getParam_E(kappa, rho, phi, z, k, l, p, z_R, w0);
 	if(component == 0) {
-		doublecomplex set_1 = imExp(I*l*phi);
-		doublecomplex set_2 = imExp(I*z*csqrt((k*k)-(kappa*kappa)));
+		doublecomplex set_1 = cexp(I*l*phi);
+		doublecomplex set_2 = cexp(I*z*sqrt((k*k)-(kappa*kappa)));
 		doublecomplex set_3 = ( alpha*laguerre_getParam_Bessel(kappa*rho, l) );
-		//doublecomplex set_3 = ( alpha*(1.0) );
-		//printf("E = %e, %e \n",creal(E), cimag(E));
-		//printf("set_1 = %e, %e \n",creal(set_1), cimag(set_1));
-		//printf("set_2 = %e, %e \n",creal(set_2), cimag(set_2));
-		//printf("set_3 = %e, %e \n",creal(set_3), cimag(set_3));
 		return E*set_1*set_2*set_3;
 	} else if(component == 1) {
 		//Same as X component, but beta NOT alpha term
 		double temp_v0 = creal(kappa)*rho;
 		double temp_v1, temp_v2, temp_v3;
-		//bjndd_(&l, &temp_v0, &temp_v1, &temp_v2, &temp_v3 );		//Bessel function, only care about t2, not t3 or 4	//##### CAREFUL OF TYPES FOR THIS RETURN #####
-		doublecomplex set_1 = imExp(I*l*phi);
-		doublecomplex set_2 = imExp(I*z*csqrt((k*k)-(kappa*kappa)));
+		//bjndd_(&l, &temp_v0, &temp_v1, &temp_v2, &temp_v3 );		//Bessel function, only care about t2, not t3 or 4 -> ## ENCOUNTERED POINTER ERRORS WITH THIS FUNCTION; AVOID ##
+		doublecomplex set_1 = cexp(I*l*phi);
+		doublecomplex set_2 = cexp(I*z*csqrt((k*k)-(kappa*kappa)));
 		doublecomplex set_3 = ( beta*laguerre_getParam_Bessel(kappa*rho, l) );
 		return E*set_1*set_2*set_3;
 	} else if(component == 2) {
-		doublecomplex set_1 = imExp(I*l*phi);
-		doublecomplex set_2 = imExp(I*z*csqrt((k*k)-(kappa*kappa)));
+		doublecomplex set_1 = cexp(I*l*phi);
+		doublecomplex set_2 = cexp(I*z*csqrt((k*k)-(kappa*kappa)));
 		doublecomplex set_3 = (kappa)/(2.0*csqrt((k*k) - (kappa*kappa)));
-		doublecomplex set_4 = (I*alpha - beta)*(imExp(-I*phi))*laguerre_getParam_Bessel(kappa*rho, l-1) - (I*alpha + beta)*(imExp(I*phi))*laguerre_getParam_Bessel(kappa*rho, l+1);
+		doublecomplex set_4 = (I*alpha - beta)*(cexp(-I*phi))*laguerre_getParam_Bessel(kappa*rho, l-1) - (I*alpha + beta)*(cexp(I*phi))*laguerre_getParam_Bessel(kappa*rho, l+1);
 		return E*set_1*set_2*set_3*set_4;
 	} else {
 		printf("Unrecognised component \n");
 		return 0.0 +0.0*I;
 	}
 }
-int factorial(int value) {
-	/*
-	. Returns the factorial of a positive integer
-	*/
-	int break_condition = 50;	//Break after 50 loops to prevent inf. loop, factorials deal with here never more than ~10
-	int factorial_value = 1;
-	if(value > 0) {
-		//Returns 1 if 0 or less
-		while(value > 0) {
-			factorial_value *= value;
-			value = value-1;
-			break_condition -= 1;
-			if(break_condition < 0) {
-				break;}
-		}
-	}
-	return factorial_value;
-}
+
 
 
 //======================================================================================================================
@@ -668,40 +641,25 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 		}
 		case B_LAGUERRE:
 			/*
-			. This 'GenerateB()' is called once (looped over every dipole point)
-			. Returned at the end ONLY, where b is the E field returned (by reference, not directly)
-
-			i 		=> each dipole index
-			j=3*i 	=> jth vector start point
-			ctemp   => value of E of beam at this point (store here temporarily) ---> doublecomplex type
-						--> This is the magnitude of the E field essentially
-			r1 		=> vector distance (double[3]) of dipole from origin (beam_center)
-			DorProd(a,b) => dot product between two vectors (k=prop)
-			DipoleCoord  => array of dipole coordinates;
-			HENCE, DipoleCoord+j => coord of ith dipole -> [doublecomplex, doublecomplex, doublecomplex]
-			cvMultScal_RVec()    => Multiplies a !doublecomplex SCALAR! by a !double VECTOR!, and stores the result in a !doublecomplex VECTOR!
-			b => the output LIST of VECTORS for each dipole's E field
-			ex, ey, prop 		 => The X,Y,Z vectors for the electric field (assuming prop is always in Z direction, true by default and in the cases important here)
+			. Custom beam implemented for ADDA for a Laguerre-Gaussian beam
+			. This implementation assumes l=0, p=8 in the 'laguerre_getParam_Llp()' function
+				-> Requires a general equation for associated legendre polynomials instead of this hard-coded approach
+			. This beam as problems when being solved with certain iterative solvers, hence it is best to use one of the following;
+				-iter csym
+				-iter bcgs2
+				-iter bicgstab
+				-iter cgnr
+			. This formulation for the Laguerre-Gaussian beam can be found at;
+				https://www.sciencedirect.com/science/article/pii/0030401894902690
+				https://pubs.aip.org/aapt/ajp/article/74/4/355/1056221
+			##
+			## NOTE; The vorticity of the beam may also need to be set within here, this still needs to be tested
+			##
 			*/
-
-			//printf("LOG PRINT; ---- Gen beam: LAGUERRE Overall ---- \n");
 			double k, wavelength, w0, rho, z_R;
 			double integral_start, integral_end;
 
-			printf("local_nvoid_Ndip= %d \n",local_nvoid_Ndip);
-
 			for (i=0;i<local_nvoid_Ndip;i++) { // standard (non-surface) plane wave
-				/*
-				l, then p specified in beam args
-				
-				- Bessel, Legendre, C all match
-				- Python used alpha = 0.4*pow(10,-8)*(1.0+1j), 
-							  beta  = 0.4*pow(10,-8)*(1.0-1j)
-				*/
-
-				//######################################
-				//## MAYBE NEED TO SET VORTICITY HERE ##
-				//######################################
 				j=3*i;
 				vSubtr(DipoleCoord+j,beam_center,r1);
 				x=DotProd(r1,ex);		//Cartesian coords
@@ -710,50 +668,38 @@ void GenerateB (const enum incpol which,   // x - or y polarized incident light
 				phi=atan2(y,x);				//
 				rho = sqrt( (x*x) +(y*y) );	//
 
-				//##########
-				//### WANT TO PULL THE LAMBDA FROM THE DATA TO DO PROPERLY
-				//##########
 				k = WaveNum;	//In micrometres, is a double, NOT doublecomplex
 				wavelength = (2.0*PI)/(k);
 				w0 = 0.6*wavelength;			//<--- Was defined elsewhere for other beams (as a param, maybe worth doing same here)
 				integral_start = 0.0;
 				integral_end   = k;
 
-				t1  = 1.0+1.0*I;//0.4*cpow(10,-8)*(1.0+1*I); 		//alpha
-				t2  = 1.0-1.0*I;//0.4*cpow(10,-8)*(1.0-1*I); 		//beta
+				t1  = 0.4*cpow(10,-8)*(1.0+1.0*I); 		//alpha
+				t2  = 0.4*cpow(10,-8)*(1.0-1.0*I); 		//beta
 				z_R = k*(w0*w0)/2.0;	//z_R
 
-				if(i==0) {
-					printf("wavelength= %e \n", wavelength);
-					printf("k = %e \n", k);
-					printf("w0= %e \n", w0);
-					printf("integral_start= %e \n", integral_start);
-					printf("integral_end  = %e \n", integral_end);
-					printf("t1 = %e, %e \n", creal(t1), cimag(t1));
-					printf("t2 = %e, %e \n", creal(t2), cimag(t2));
-					printf("z_R= %e \n", z_R);
-				}
-
-				//printf("bessel func jn(0,0)= %e \n",_jn(0));
-				//printf("bessel func jn(0,1)= %e \n",_jn(1));
+				//## Bug-Fixing ##
+				// if(i==0) {
+				// 	printf("wavelength= %e \n", wavelength);
+				// 	printf("k = %e \n", k);
+				// 	printf("w0= %e \n", w0);
+				// 	printf("z_R= %e \n", z_R);
+				// 	printf("integral_start= %e \n", integral_start);
+				// 	printf("integral_end  = %e \n", integral_end);
+				// 	printf("t1 = %e, %e \n", creal(t1), cimag(t1));
+				// 	printf("t2 = %e, %e \n", creal(t2), cimag(t2));
+				// }
 
 				t6 = integrate_simpsons_rule(integral_start, integral_end, 31, laguerre_getParam_E_component, 0, rho, phi, z, k, l, p, z_R, w0, t1, t2);	//E_x
 				t7 = integrate_simpsons_rule(integral_start, integral_end, 31, laguerre_getParam_E_component, 1, rho, phi, z, k, l, p, z_R, w0, t1, t2);	//E_y
 				t8 = integrate_simpsons_rule(integral_start, integral_end, 31, laguerre_getParam_E_component, 2, rho, phi, z, k, l, p, z_R, w0, t1, t2);	//E_z
-				//--REAL PART--
-				//t6 = creal(t6);//sqrt(creal(t6)*cimag(t6));	//Just take magnitude for E
-				//t7 = creal(t7);//sqrt(creal(t7)*cimag(t7));	//
-				//t8 = creal(t8);//sqrt(creal(t8)*cimag(t8));	//
-				//--IMAGINARY PART--
-				//t6 = cimag(t6);
-				//t7 = cimag(t7);
-				//t8 = cimag(t8);
 
-				if(i==0) {
-					printf("t6 = %e, %e \n", creal(t6), cimag(t6));
-					printf("t7 = %e, %e \n", creal(t7), cimag(t7));
-					printf("t8 = %e, %e \n", creal(t8), cimag(t8));
-				}
+				//## Bug-Fixing ##
+				// if(i==0) {
+				// 	printf("t6 = %e, %e \n", creal(t6), cimag(t6));
+				// 	printf("t7 = %e, %e \n", creal(t7), cimag(t7));
+				// 	printf("t8 = %e, %e \n", creal(t8), cimag(t8));
+				// }
 
 				cvMultScal_RVec(t6,ex,v1);		//X component of E
 				cvMultScal_RVec(t7,ey,v2);		//Y component of E
