@@ -109,7 +109,10 @@ def func4(a, b, r):
 
 
 def Djj(dipole_radius):  # For Diffusion
-    """ """
+    #
+    # This is valid for a sphere, but not other shapes e.g. a torus
+    # This will need to be changed when considering the dynamics of ither particle shapes
+    #
     djj = (k_B * temperature) / (6 * np.pi * viscosity * dipole_radius)
     D = np.zeros([3, 3])
     np.fill_diagonal(D, djj)
@@ -132,8 +135,9 @@ def Djk(x, y, z, r):
     return ((k_B * temperature) / (8 * np.pi * viscosity * r)) * D
 
 
-def buckingham_force(Hamaker, constant1, constant2, r, dipole_radius):
-    r_max = 2.2 * dipole_radius
+"""
+def buckingham_force(Hamaker, constant1, constant2, r, radius_i, radius_j):
+    r_max = 1.1 * (radius_i +radius_j)
     r_abs = np.linalg.norm(r)
     if r_abs < r_max:
         print("Eeek!! r_abs = ", r_abs)
@@ -146,6 +150,41 @@ def buckingham_force(Hamaker, constant1, constant2, r, dipole_radius):
                 - (
                     (32 * Hamaker * (dipole_radius ** 6))
                     / (3 * (r_abs ** 3) * (r_abs ** 2 - 4 * (dipole_radius ** 2)) ** 2)
+                )
+            )
+            * (r[i] / r_abs)
+            for i in range(3)
+        ]
+    )
+    # force = np.zeros(3)
+    # force[0] = -(constant1*constant2*np.exp(-constant2*r_abs) - ((32*Hamaker*(dipole_radius**6))/(3*(r_abs**3)*(r_abs**2 - 4*(dipole_radius**2))**2)))*(r[0]/r_abs)
+    # force[1] = -(constant1*constant2*np.exp(-constant2*r_abs) - ((32*Hamaker*(dipole_radius**6))/(3*(r_abs**3)*(r_abs**2 - 4*(dipole_radius**2))**2)))*(r[1]/r_abs)
+    # force[2] = -(constant1*constant2*np.exp(-constant2*r_abs) - ((32*Hamaker*(dipole_radius**6))/(3*(r_abs**3)*(r_abs**2 - 4*(dipole_radius**2))**2)))*(r[2]/r_abs)
+
+    return force
+"""
+
+def buckingham_force(Hamaker, constant1, constant2, r, radius_i, radius_j):
+    r_max = 1.1 * (radius_i +radius_j)
+    r_abs = np.linalg.norm(r)
+    if r_abs < r_max:
+        #
+        # NOTE; Temporary while bug fixing
+        #
+        #print("Eeek!! r_abs = ", r_abs)
+        r_abs = r_max  # capping the force
+
+    ###
+    ### NOTE; WILL NEED REWORKING FOR BETTER RADIUS MANAGEMENT
+    ###
+    radius_avg = (radius_i+radius_j)/2.0
+    force = np.array(
+        [
+            -(
+                constant1 * constant2 * np.exp(-constant2 * r_abs)
+                - (
+                    (32 * Hamaker * (radius_avg ** 6))
+                    / (3 * (r_abs ** 3) * (r_abs ** 2 - 4 * (radius_avg ** 2)) ** 2)
                 )
             )
             * (r[i] / r_abs)
@@ -378,7 +417,10 @@ def optical_force_array(array_of_particles, E0, dipole_radius, dipole_primitive)
     #print(final_optical_forces)
     return final_optical_forces,couples
 
-
+"""
+#
+# LEGACY -> BEFORE SHAPE,ARGS CHANGE
+#
 def buckingham_force_array(array_of_positions, dipole_radius):
     number_of_dipoles = len(array_of_positions)
     displacements_matrix = displacement_matrix(array_of_positions)
@@ -401,6 +443,43 @@ def buckingham_force_array(array_of_positions, dipole_radius):
                     ConstantB,
                     displacements_matrix_T[i][j],
                     dipole_radius,
+                )
+    buckingham_force_array = np.zeros((number_of_dipoles,3),dtype=np.float64)
+    temp = np.sum(buckingham_force_matrix, axis=1)
+    for i in range(number_of_dipoles):
+        buckingham_force_array[i] = temp[i]
+    return buckingham_force_array
+"""
+
+
+def buckingham_force_array(array_of_positions, effective_radii):
+    number_of_dipoles = len(array_of_positions)
+    displacements_matrix = displacement_matrix(array_of_positions)
+    displacements_matrix_T = np.transpose(displacements_matrix)
+    #    Hamaker = (np.sqrt(30e-20) - np.sqrt(4e-20))**2
+    Hamaker = 0
+    ConstantA = 1.0e23
+    ConstantB = 2.0e8  # 4.8e8
+    buckingham_force_matrix = np.zeros(
+        [number_of_dipoles, number_of_dipoles], dtype=object
+    )
+    #
+    # ?? Maybe rename 'dipoles' to 'particles' in here, as just used for whole particles now
+    #
+
+
+    for i in range(number_of_dipoles):
+        for j in range(number_of_dipoles):
+            if i == j:
+                buckingham_force_matrix[i][j] = [0, 0, 0]
+            else:
+                buckingham_force_matrix[i][j] = buckingham_force(
+                    Hamaker,
+                    ConstantA,
+                    ConstantB,
+                    displacements_matrix_T[i][j],
+                    effective_radii[i],
+                    effective_radii[j]
                 )
     buckingham_force_array = np.zeros((number_of_dipoles,3),dtype=np.float64)
     temp = np.sum(buckingham_force_matrix, axis=1)
@@ -476,6 +555,8 @@ def gravity_force_array(array_of_positions, dipole_radius):
 
 
 def diffusion_matrix(array_of_positions, dipole_radius):
+    # positions of particle centres
+    # dipole_radius is actually considering the spehre radius here
     list_of_displacements = [u - v for u, v in it.combinations(array_of_positions, 2)]
     array_of_displacements = np.zeros(len(list_of_displacements), dtype=object)
     for i in range(len(list_of_displacements)):
@@ -512,12 +593,17 @@ def diffusion_matrix(array_of_positions, dipole_radius):
 
 
 
-def sphere_positions(sphere_radius, dipole_radius):
+def sphere_size(args, dipole_radius):
+    #
+    # Counts number of points in object
+    #
     dipole_diameter = 2*dipole_radius
+    sphere_radius = args[0]
     dd2 = dipole_diameter**2
     sr2 = sphere_radius**2
     print(sphere_radius,dipole_radius)
     num = int(sphere_radius//dipole_diameter)
+    
     number_of_dipoles = 0
     for i in range(-num,num+1):
         i2 = i*i
@@ -528,8 +614,19 @@ def sphere_positions(sphere_radius, dipole_radius):
                 rad2 = (i2+j2+k2)*dd2
                 if rad2 < sr2:
                     number_of_dipoles += 1
-    pts = np.zeros((number_of_dipoles, 3))
+    return number_of_dipoles
+
+def sphere_positions(args, dipole_radius, number_of_dipoles_total):
+    #
+    # With pts size known now, particles are added to this array
+    #
+    dipole_diameter = 2*dipole_radius
+    sphere_radius = args[0]
+    dd2 = dipole_diameter**2
+    sr2 = sphere_radius**2
+    pts = np.zeros((number_of_dipoles_total, 3))
     number_of_dipoles = 0
+    num = int(sphere_radius//dipole_diameter)
     for i in range(-num,num+1):
         i2 = i*i
         x = i*dipole_diameter
@@ -541,10 +638,115 @@ def sphere_positions(sphere_radius, dipole_radius):
                 z = k*dipole_diameter
                 rad2 = (i2+j2+k2)*dd2
                 if rad2 < sr2:
-                    pts[number_of_dipoles][0] = x+1e-20
-                    pts[number_of_dipoles][1] = y+1e-20
+                    pts[number_of_dipoles][0] = x+1e-20     # Softening factor
+                    pts[number_of_dipoles][1] = y+1e-20     #
                     pts[number_of_dipoles][2] = z
                     number_of_dipoles += 1
+    print(number_of_dipoles," dipoles generated")
+    return pts
+
+
+def torus_sector_size(args, dipole_radius):
+    #
+    # Only supports torus flat in XY plane
+    # torus_centre_radius = distance from origin to centre of tube forming the torus
+    # torus_tube_radius = radius of the tube cross section of the torus
+    # phi_lower = smaller angle in XY plane, from positive X axis, to start torus sector from (0,2*PI)
+    # phi_upper = larger angle in XY plane, from positive X axis, to end torus sector at (0,2*PI)
+    #
+    # ** Could be extended to be tilted
+    # ** Could also move x,y,z calcualtion into if to speed up program -> reduce waste on non-dipole checks
+    #
+    torus_centre_radius, torus_tube_radius, phi_lower, phi_upper = args
+    dipole_diameter = 2*dipole_radius
+    dd2 = dipole_diameter**2
+    ttr2 = torus_tube_radius**2
+    print(torus_centre_radius, torus_tube_radius, dipole_radius)
+    num_xy = int( (torus_tube_radius+torus_centre_radius)//dipole_diameter)     #Number of dipoles wide in each direction (XY, wide directions)
+    num_z  = int( torus_centre_radius//dipole_diameter)                         #Number of dipoles tall (shorter)
+    #x_shift = torus_centre_radius*np.cos( (phi_lower+phi_upper)/2.0 )
+    #y_shift = torus_centre_radius*np.sin( (phi_lower+phi_upper)/2.0 )
+    #
+    # Counts number of points in object
+    #
+    number_of_dipoles = 0
+    print("args= ",args);
+    for i in range(-num_xy,num_xy+1):
+        i2 = i*i
+        for j in range(-num_xy,num_xy+1):
+            j2 = j*j
+            phi = arctan2(j,i);
+
+            phi = phi%(2.0*np.pi)
+            phi_lower = phi_lower%(2.0*np.pi)
+            phi_upper = phi_upper%(2.0*np.pi)
+            withinBounds = False
+            if(phi_lower <= phi_upper):
+                withinBounds = ( (phi_lower < phi) and (phi < phi_upper) )
+            else:
+                withinBounds = ( (phi_lower < phi) or (phi < phi_upper) )
+            
+            if(withinBounds):
+                for k in range(-num_z,num_z+1):
+                    k2 = k*k
+                    rad_xy_2 = (i2 + j2)*dd2
+                    #pow( centre_R-sqrt( pow(point.x,2) + pow(point.y,2) ) ,2) +pow(point.z,2) <= pow(tube_R,2)
+                    if (torus_centre_radius -np.sqrt(rad_xy_2))**2 +k2*dd2 < ttr2:
+                        number_of_dipoles += 1
+    print("nuber_diples= ",number_of_dipoles);
+    return number_of_dipoles
+
+def torus_sector_positions(args, dipole_radius, number_of_dipoles_total):
+    #
+    # Only supports torus flat in XY plane
+    # torus_centre_radius = distance from origin to centre of tube forming the torus
+    # torus_tube_radius = radius of the tube cross section of the torus
+    # phi_lower = smaller angle in XY plane, from positive X axis, to start torus sector from (0,2*PI)
+    # phi_upper = larger angle in XY plane, from positive X axis, to end torus sector at (0,2*PI)
+    #
+    # ** Could be extended to be tilted
+    # ** Could also move x,y,z calcualtion into if to speed up program -> reduce waste on non-dipole checks
+    #
+    torus_centre_radius, torus_tube_radius, phi_lower, phi_upper = args
+    dipole_diameter = 2*dipole_radius
+    dd2 = dipole_diameter**2
+    ttr2 = torus_tube_radius**2
+    print(torus_centre_radius, torus_tube_radius, dipole_radius)
+    num_xy = int( (torus_tube_radius+torus_centre_radius)//dipole_diameter)     #Number of dipoles wide in each direction (XY, wide directions)
+    num_z  = int( torus_centre_radius//dipole_diameter)                         #Number of dipoles tall (shorter)
+    x_shift = torus_centre_radius*np.cos( (phi_lower+phi_upper)/2.0 )
+    y_shift = torus_centre_radius*np.sin( (phi_lower+phi_upper)/2.0 )
+
+    pts = np.zeros((number_of_dipoles_total, 3))
+    number_of_dipoles = 0
+    for i in range(-num_xy,num_xy+1):
+        i2 = i*i
+        x = i*dipole_diameter
+        for j in range(-num_xy,num_xy+1):
+            j2 = j*j
+            y = j*dipole_diameter
+            phi = arctan2(j,i);
+            
+            phi = phi%(2.0*np.pi)
+            phi_lower = phi_lower%(2.0*np.pi)
+            phi_upper = phi_upper%(2.0*np.pi)
+            withinBounds = False
+            if(phi_lower <= phi_upper):
+                withinBounds = ( (phi_lower < phi) and (phi < phi_upper) )
+            else:
+                withinBounds = ( (phi_lower < phi) or (phi < phi_upper) )
+
+            if(withinBounds):
+                for k in range(-num_z,num_z+1):
+                    k2 = k*k
+                    z = k*dipole_diameter
+                    rad_xy_2 = (i2 + j2)*dd2
+                    #pow( centre_R-sqrt( pow(point.x,2) + pow(point.y,2) ) ,2) +pow(point.z,2) <= pow(tube_R,2)
+                    if (torus_centre_radius -np.sqrt(rad_xy_2))**2 +k2*dd2 < ttr2:
+                        pts[number_of_dipoles][0] = x+1e-20 -x_shift     # Softening factor
+                        pts[number_of_dipoles][1] = y+1e-20 -y_shift     #
+                        pts[number_of_dipoles][2] = z
+                        number_of_dipoles += 1
     print(number_of_dipoles," dipoles generated")
     return pts
 
@@ -552,10 +754,21 @@ def sphere_positions(sphere_radius, dipole_radius):
 #
 # Have both sphere radius and dipole radius in argument list
 #
-def simulation(number_of_particles, positions, sphere_radius, dipole_radius):
+def simulation(number_of_particles, positions, shapes, args):
+    #
+    # shapes = List of shape types used
+    # args   = List of arguments about system and particles; [dipole_radius, particle_parameters]
+    # particle_parameters; Sphere = [sphere_radius]
+    #                      Torus  = [torus_centre_radius, torus_tube_radius]
+    #
+
+    ####
+    ## NOTE; EEK CURRENTLY DISABLED FOR BUGIXING
+    ####
+
     #    MyFileObject = open('anyfile.txt','w')
     #position_vectors = positions(number_of_particles)
-    position_vectors = positions
+    position_vectors = positions    #Of each particle centre
     print(positions)
     #position_vectors = np.zeros((number_of_particles,3),dtype=np.float64)
     temp = np.zeros(6)
@@ -571,8 +784,26 @@ def simulation(number_of_particles, positions, sphere_radius, dipole_radius):
     #
     # Generate a list of dipoles for one sphere
     #
-    dipole_primitive = sphere_positions(sphere_radius, dipole_radius)
-    #print(dipole_primitive)
+
+    # Get total number of particles involved over all particles
+    dipole_primitive_num = np.zeros(number_of_particles, dtype=int)
+    for particle_i in range(number_of_particles):
+        match shapes[particle_i]:
+            case "sphere":
+                dipole_primitive_num[particle_i] = sphere_size(args[particle_i], dipole_radius)
+            case "torus":
+                dipole_primitive_num[particle_i] = torus_sector_size(args[particle_i], dipole_radius)
+    dipole_primitive_num_total = np.sum(dipole_primitive_num);
+    # Get dipole primitive positions for each particle
+    dipole_primitives = np.zeros( (dipole_primitive_num_total,3), dtype=float)   #Flattened 1D list of all dipoles for all particles
+    dpn_start_indices = np.append(0, np.cumsum(dipole_primitive_num[:-1]))
+    for particle_i in range(number_of_particles):
+        match shapes[particle_i]:
+            case "sphere":
+                dipole_primitives[dpn_start_indices[particle_i]: dpn_start_indices[particle_i]+dipole_primitive_num[particle_i]] = sphere_positions(args[particle_i], dipole_radius, dipole_primitive_num[particle_i])
+            case "torus":
+                dipole_primitives[dpn_start_indices[particle_i]: dpn_start_indices[particle_i]+dipole_primitive_num[particle_i]] = torus_sector_positions(args[particle_i], dipole_radius, dipole_primitive_num[particle_i])
+    
     if excel_output==True:
         optpos = np.zeros((frames,n_particles,3))
         if include_force==True:
@@ -586,17 +817,14 @@ def simulation(number_of_particles, positions, sphere_radius, dipole_radius):
 
     for i in range(number_of_timesteps):
         #        print("positions: ",position_vectors)
-        #
-        # Call diffusion_matrix with sphere radius not dipole radius
-        #
-        #D = diffusion_matrix(position_vectors, dipole_radius)
-        D = diffusion_matrix(position_vectors, radius)
+        
         #
         # Pass in list of dipole positions to generate total dipole array;
         # All changes inside optical_force_array().
         #
         #optical,couples = optical_force_array(position_vectors, E0, dipole_radius, dipole_primitive)
-        optical, torques, couples = Dipoles.py_optical_force_torque_array(position_vectors, dipole_radius, dipole_primitive, inverse_polarizability, beam_collection)
+
+        optical, torques, couples = Dipoles.py_optical_force_torque_array(position_vectors, np.asarray(dipole_primitive_num), dipole_radius, dipole_primitives, inverse_polarizability, beam_collection)
 
         #couples = None
         #include_couple==False
@@ -616,7 +844,30 @@ def simulation(number_of_particles, positions, sphere_radius, dipole_radius):
         if i%10 ==0:
             print("Step ",i)
             print(i,optical)
-        buckingham = buckingham_force_array(position_vectors, radius)
+
+
+
+        # Finds a characteristic radius for each shape to calcualte Buckingham forces
+        effective_radii = np.zeros(number_of_particles, dtype=np.float64)
+        for i in range(number_of_particles):
+            match shapes[i]:
+                case "sphere":
+                    effective_radii[i] = args[i][0]
+                case "torus":
+                    effective_radii[i] = (args[i][0] + args[i][1])
+
+        #
+        # Call diffusion_matrix with sphere radius not dipole radius
+        #
+
+        ##
+        ## TODO; NEEDS TO BE PER PARTICLE
+        ##
+        D = diffusion_matrix(position_vectors, args[0][0])
+        #D = diffusion_matrix(position_vectors, dipole_radius)
+
+
+        buckingham = buckingham_force_array(position_vectors, effective_radii)
 #        spring = spring_force_array(position_vectors, radius)
 #        driver = driving_force_array(position_vectors)
 #        bending = bending_force_array(position_vectors, radius)
@@ -721,14 +972,16 @@ ref_ind = particle_collection.get_refractive_indices()
 particle_types = particle_collection.get_particle_types()
 colors = particle_collection.get_particle_colours()
 vtfcolors = particle_collection.get_particle_vtfcolours()
-radii = particle_collection.get_particle_radii()
-radius = radii[0] # because we cannot handle variable radii yet.
+#radii = particle_collection.get_particle_radii()
+shapes = particle_collection.get_particle_shape()
+args   = particle_collection.get_particle_args()
+#radius = radii[0] # because we cannot handle variable radii yet.
 density = particle_collection.get_particle_density()
 rho = density[0] # not yet implemented.
 positions = particle_collection.get_particle_positions()
 
 for i in range(n_particles):
-    print(i,particle_types[i],ref_ind[i],colors[i],radii[i],density[i],positions[i])
+    print(i,particle_types[i],ref_ind[i],colors[i],shapes[i],args[i],density[i],positions[i])
 #===========================================================================
 # Set up particle polarisabilities and other spurious options
 #===========================================================================
@@ -737,9 +990,15 @@ ep1 = ref_ind**2
 ep2 = 1.0
 #radius = 200e-9
 #rho = 2200 # glass density
-mass = (4/3)*rho*np.pi*radius**3
-gravity = np.zeros(3,dtype=np.float64)
-gravity[1] = -9.81*mass
+#mass = (4/3)*rho*np.pi*radius**3
+masses  = particle_collection.get_particle_masses()
+gravity = np.zeros( (n_particles,3) ,dtype=np.float64)
+# ??
+# ?? POSSIBLE ERROR HERE WITH gravity[1] AS OPPOSED TO gravity[2]
+# ??
+gravity[:,1] = -9.81*masses
+#gravity = np.zeros(3,dtype=np.float64)
+#gravity[1] = -9.81*mass
 print("dipole radius is:",dipole_radius,type(dipole_radius))
 water_permittivity = 80.4
 vacuum_permittivity = 1
@@ -775,18 +1034,47 @@ beam = "plane"  # LEGACY REMOVE
 #===========================================================================
 
 initialT = time.time()
-particles,optpos, optforces,optcouples = simulation(n_particles, positions, radius, dipole_radius)
+particles, optpos, optforces, optcouples = simulation(n_particles, positions, shapes, args)
+
+#
+# NOTE; Particles output here can be removed, appears to be legacy code used to plot and store particle information
+#       Now is not used for anything and appears to perform the same job as optpos
+#
+#       optpos is not the same as paticles here but does still seem unncessary --> could be previous step -> Offset by 1?
+#
+#       optpos also seems to be a misnomer, as it is the stepped positions from the Buckingham+ forces as well as the optical force
+#
+
 finalT = time.time()
 print("Elapsed time: {:8.6f} s".format(finalT-initialT))
 
 # =====================================
 # This code for matplotlib animation output and saving
 
+for i in range(optforces.shape[0]):
+    print("optforces "+str(i)+"= ",optforces[i]);
+
 if display.show_output==True:
 
-    fig,ax = display.plot_intensity(beam_collection)
+    #fig,ax = display.plot_intensity(beam_collection)
+    #display.animate_particles(fig,ax,particles,radius,colors)
+    fig, ax = display.plot_intensity3d(beam_collection)
 
-    display.animate_particles(fig,ax,particles,radius,colors)
+    ###
+    ### FIX HERE FOR RADIUS
+    ###
+    #effective_radii = np.zeros(n_particles, dtype=np.float64)
+    #for i in range(n_particles):
+    #    match shapes[i]:
+    #        case "sphere":
+    #            effective_radii[i] = args[i][0]
+    #        case "torus":
+    #            effective_radii[i] = (args[i][0] + args[i][1])
+    display.animate_particles3d(fig, ax, optpos, shapes, args, colors)
+    #
+    # SHOULD MAYBE USE XYZ LIST1 FOR NOW WHILE VISUALISING UNSTEPPED SINGLE
+    #
+
 
 
 # writer = animation.PillowWriter(fps=30)
@@ -806,7 +1094,12 @@ if display.show_output==True:
 #===========================================================================
 
 if vmd_output==True:
-    Output.make_vmd_file(filename_vtf,n_particles,frames,timestep,particles,optpos,beam_collection,finalT-initialT,radius,dipole_radius,z_offset,particle_types,vtfcolors)
+    #
+    # Uses old radius system, NOT shape,args
+    # Must be fixed
+    #
+    pass
+    #Output.make_vmd_file(filename_vtf,n_particles,frames,timestep,particles,optpos,beam_collection,finalT-initialT,radius,dipole_radius,z_offset,particle_types,vtfcolors)
 
 if excel_output==True:
     Output.make_excel_file(filename_xl,n_particles,frames,timestep,particles,optpos,include_force,optforces,include_couple,optcouples)

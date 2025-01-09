@@ -9,6 +9,7 @@ class ParticleCollection (object):
                      'Sapphire': [2.5, '#b01240', '#e81e80','O'],
                      'Diamond': [2.417, '#b01240', '#e81e80','C'],
                      'SiN': [2.046, '#d8ff60', '#e8ff80','P',],
+                     'Calcite': [1.55, '#e0a105', '#ffe10a','S'],
                      'Glass': [1.5, '#1870d0', '#2298f5','N'],
                      'LeadGlass': [1.6, '#1870d0', '#2298f5','N'],
                      'Low': [1.446, '#7e7e7e', '#aeaeae','H',],
@@ -25,12 +26,16 @@ class ParticleCollection (object):
                      }
                      
     defaults = {"default_material":'FusedSilica',
-                "default_radius":'200e-9',
+                #"default_radius":'200e-9',
+                "default_shape":'sphere',
+                "default_args":'200e-9',
                 "default_density":'2200', # kg/m^3 typical glass value
                 }
     default_material = defaults['default_material']
-    default_radius = float(defaults['default_radius'])
-    default_density = float(defaults['default_density'])
+    #default_radius   = float(defaults['default_radius'])
+    default_shape    = defaults['default_shape']
+    default_args     = defaults['default_args']
+    default_density  = float(defaults['default_density'])
 
     
     def __init__(self,particleinfo):
@@ -38,7 +43,9 @@ class ParticleCollection (object):
             # Set defaults
             ParticleCollection.num_particles = 1
             self.particle_type = np.asarray([ParticleCollection.default_material])
-            self.particle_radius = np.asarray([ParticleCollection.default_radius])
+            #self.particle_radius = np.asarray([ParticleCollection.default_radius])
+            self.particle_shape.append(self.default_shape)
+            self.particle_args.append( self.default_args.split(" ") )
             self.particle_indices = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][0]],dtype=complex)
             self.particle_colour = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][1]])
             self.particle_vtfcolour = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][3]])
@@ -47,13 +54,15 @@ class ParticleCollection (object):
         else:
             # Read from file
             self.default_material = particleinfo.get('default_material',ParticleCollection.default_material)
-            self.default_radius = float(particleinfo.get('default_radius',ParticleCollection.default_radius))
+            #self.default_radius = float(particleinfo.get('default_radius',ParticleCollection.default_radius))
             self.particle_list = particleinfo.get('particle_list',None)
             if self.particle_list==None or self.particle_list==False:
                 # Set defaults
                 ParticleCollection.num_particles = 1
                 self.particle_type = np.asarray([ParticleCollection.default_material])
-                self.particle_radius = np.asarray([ParticleCollection.default_radius])
+                #self.particle_radius = np.asarray([ParticleCollection.default_radius])
+                self.particle_shape.append(self.default_shape)
+                self.particle_args.append( self.default_args.split(" ") )
                 self.particle_indices = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][0]],dtype=complex)
                 self.particle_colour = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][1]])
                 self.particle_vtfcolour = np.asarray([ParticleCollection.particle_spec[ParticleCollection.default_material][3]])
@@ -63,7 +72,9 @@ class ParticleCollection (object):
                 # Read individual particles
                 i=0
                 self.particle_type = []
-                self.particle_radius = []
+                #self.particle_radius = []
+                self.particle_shape = []    # Name of shape e.g "sphere", "torus"
+                self.particle_args  = []    # Parameters for specific shape e.g. [radius], [r1,r2,phi1,phi2]
                 self.particle_colour = []
                 self.particle_vtfcolour = []
                 self.particle_positions = []
@@ -74,7 +85,21 @@ class ParticleCollection (object):
                     print("Loading particle",particle)
                     if particle != None:
                         self.particle_type.append(particle.get('material',self.default_material))
-                        self.particle_radius.append(float(particle.get('radius',self.default_radius)))
+                        #self.particle_radius.append(float(particle.get('radius',self.default_radius)))
+
+                        self.argsraw = particle.get('args',self.default_args)
+                        self.args    = self.argsraw.split(" ")
+                        match (particle.get('shape',self.default_shape), len(self.args)):
+                            case ("sphere", 1):
+                                self.particle_shape.append("sphere")
+                                self.particle_args.append(self.args)
+                            case ("torus", 4):
+                                self.particle_shape.append("torus")
+                                self.particle_args.append(self.args)
+                            case _:
+                                self.particle_shape.append(self.default_shape)
+                                self.particle_args.append(self.default_args)
+
                         self.altcolour = bool(particle.get('altcolour',False))
                         if self.altcolour==False:
                             self.particle_colour.append(ParticleCollection.particle_spec[self.particle_type[i]][1])
@@ -94,7 +119,9 @@ class ParticleCollection (object):
                     else:
                         ParticleCollection.num_particles = 1
                         self.particle_type.append(ParticleCollection.default_material)
-                        self.particle_radius.append(ParticleCollection.default_radius)
+                        #self.particle_radius.append(ParticleCollection.default_radius)
+                        self.particle_shape.append(self.default_shape)
+                        self.particle_args.append( self.default_args.split(" ") )
                         self.particle_indices.append(ParticleCollection.particle_spec[ParticleCollection.default_material][0])
                         self.particle_colour.append(ParticleCollection.particle_spec[ParticleCollection.default_material][1])
                         self.particle_vtfcolour.append(ParticleCollection.particle_spec[ParticleCollection.default_material][3])
@@ -116,11 +143,44 @@ class ParticleCollection (object):
         return np.asarray(self.particle_vtfcolour)
         
     def get_particle_radii(self):
+        #
+        # OUTDATED -> USING SHAPE,ARGS SYSTEM NOW
+        #
         return np.asarray(self.particle_radius,dtype=float)
 
+    def get_particle_shape(self):
+        return np.asarray(self.particle_shape)
+
+    def get_particle_args(self):
+        #
+        # Try to vectorise this neatly
+        #   Main problem is variable length args
+        #
+        set = np.zeros(ParticleCollection.num_particles, dtype=object)
+        for i in range(ParticleCollection.num_particles):
+            set[i] = np.asarray(self.particle_args[i],dtype=float)
+        return set
+    
     def get_particle_density(self):
+        #
+        # **NOTE; May want to have variable densities
+        #
         return np.asarray(self.particle_density,dtype=float)
 
     def get_particle_positions(self):
         return np.asarray(self.particle_positions,dtype=float).reshape((ParticleCollection.num_particles,3))
     
+    def get_particle_masses(self):
+        #
+        # Gets the masses of each shape
+        #
+        masses = np.ones(ParticleCollection.num_particles, dtype=float);
+        for i in range(ParticleCollection.num_particles):
+            match self.particle_shape[i]:
+                case "sphere":
+                    masses[i] = (4/3)*float(self.particle_density[i])*np.pi*float(self.particle_args[i][0])**3
+                case "torus":
+                    masses[i] = float(self.particle_density[i])*2.0*(np.pi**2)*float(self.particle_args[i][1])**2 *float(self.particle_args[i][0])
+                case _:
+                    print("Invalid shape: During mass calc, ",i)
+        return masses

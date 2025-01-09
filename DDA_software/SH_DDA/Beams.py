@@ -32,7 +32,15 @@ POLARISATION_iY = 7
 numpoints = 1
 
 # Find the library and load it
-beams_abs_path = os.path.abspath("./libBeams.so");
+#beams_abs_path = os.path.abspath("./libBeams.so");
+match(sys.platform):
+    case('linux'):
+        beams_abs_path = os.path.abspath("./libBeams.so");
+    case('darwin'):
+        beams_abs_path = os.path.abspath("./libBeams");
+    case _:
+        print("System not found; Found ",sys.platform);
+        sys.exit();
 beams_path = ctypes.util.find_library(beams_abs_path)
 if not beams_path:
     print("Unable to find the specified library: Beams")
