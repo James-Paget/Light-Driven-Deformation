@@ -6,7 +6,7 @@ def PullAddaData():
     """
     . Pulls all (1 )position and (2) force data from an run instance of adda
     """
-    dipolePositions = PullAddaData_DipolePositions("box.geom"); #### NEED TO MAKE THIS USE THE CUSTOM OBJECT WE WILL DEAL WITH -> ALWAYS INSTEAD ####
+    dipolePositions = PullAddaData_DipolePositions("box.geom");
     dipoleForces = PullAddaData_DipoleForces("RadForce-Y");
     #pass
     return dipolePositions, dipoleForces;
@@ -16,9 +16,6 @@ def PullAddaData_Parameters(filename):
     . Pulls other miscellaneous parameters from the log file adda generates
     . Values are;
     [lambda, [refractive_index_real, refractive_index_imag], dipole_size, [beam_center_x, beam_center_y, beam_center_z], [beam_dir_x, beam_dir_y, beam_dir_z]]
-    ####
-    ## BEAM CENTERS NOT DONE YET BUT SAME SITUATION
-    ####
     """
     #Load file
     file = open(filename, "r");
@@ -48,9 +45,6 @@ def PullAddaData_Parameters(filename):
                     for unref_char_index in range(0,len(unref_value)):
                         unref_char = unref_value[unref_char_index:unref_char_index+1];
                         match unref_char:
-                            ####
-                            ## COULD JUST DO AN IF AND COMBINE THE +- CASES --> MAYBE NICER TO SEE
-                            ####
                             case "+":
                                 #Implies the real part has been obtained
                                 value.append(unref_value[startIndex:unref_char_index]); #Casted later
@@ -108,9 +102,6 @@ def PullAddaData_DipolePositions(filename):
     where dip_Pos = [x,y,z]
     
     .** Note; Assumes the file is in the same folder as this python script
-    ####
-    ## MULTIPLE EACH BY THE SPACING OF THE LATTICE, SO IT IS A RAW POSITION [NON-SCALED] --> DO THIS AT THE END ##
-    ####
     """
     #Load file
     file = open(filename, "r");
@@ -218,10 +209,6 @@ def FetchParticleOffset(timeStep, particleDetails, posForce_set):
         sets of the list [x,y,z, |F|^2,Fx,Fy,Fz]
 
     .**Note; ADDA only offsets the beam centre => it can be offset by -ve the particle's offset
-    
-    ########
-    ## ASSUMED MASS=1, PERHAPS ASSUME LOWER (AND JUST USE AS A SCALING FACTOR) OR ACTUALLY CALCULATE
-    ########
     """
     #Initialise values
     mass = 1.0;
@@ -244,9 +231,6 @@ def FetchParticleOffset(timeStep, particleDetails, posForce_set):
 
 
 def run_adda(input_file, output_folder, beam_offset, m1Re, path_to_adda):
-    ####
-    ## BEAM PROPOGATION DIRECTION DOES NOT APPEAR TO BE CHANGING RESULTS ??? Possibly just hard to see or some cancelling effect [SEEMS VERY UNLIKELY] ???
-    ###
     adda_command = "./adda -shape read " + input_file + " -prop 1 0 0" + " -beam_center " + str(beam_offset[0]) + " " + str(beam_offset[1]) + " " + str(beam_offset[2]) + " -m " + str(m1Re) + " 0 -store_force -dir " + output_folder
     adda_command = adda_command.split(" ")
     result = subprocess.run(adda_command, cwd=path_to_adda+"/src/seq", stdout=subprocess.DEVNULL)
@@ -258,7 +242,7 @@ def main():
     particleDetails = {"offset_history":[np.array([0.0, 0.0, 0.0])], "velocity_history":[np.array([0.0, 0.0, 0.0])]}
     timeStep = 1e-3;      #Time step of the simulation, more accurate of middling values (~10^-4/10^-5)
 
-    path_to_adda = "/home/james/Desktop/Abraham-Minkowski_Project/adda"  #/home/james/Desktop/Abraham-Minkowski_Project/ADDA_Sim
+    path_to_adda = "/home/james/Desktop/Abraham-Minkowski_Project/ADDA_Sim"
     input_file = "box.geom"
     output_folder = "output_folder"
     num_iterations = 100

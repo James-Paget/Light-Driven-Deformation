@@ -261,7 +261,7 @@ def Calculate_FarField_Grid(posPolarisations, exclusionRadius, space_data, k, pe
                         F_n_polarisation += dip_polarisations[dip_ind]*np.exp(-1j*k*np.dot(r_dipole, n_hat) );      #Scattering amplitude
                     F_n = np.matmul((-1j*pow(k,3))*( np.identity(3) - np.outer(n_hat, n_hat) ), (F_n_polarisation));  #A matrix acting on a vector -> gives a vector
                 
-                    k_scat = k;     ############################### MAYBE 'k_scat' NEEDS TO BE * REFRACTIVE INDEX ##############################
+                    k_scat = k;     # Elastic scattering
                     E_far_field_gridPoint = ( (np.exp(1j*k_scat*r_point_mag))/(-1j*k_scat*r_point_mag) )*(F_n);    #'j' complex in python
                     E_far_field[k_ind][j_ind].append(E_far_field_gridPoint);
                 else:
@@ -374,13 +374,104 @@ def Format_PosVariable_List(posVariables):
 
     return dip_positions, dip_variable;     #[[x,y,z],...] and [[E_x,E_y,E_z],...] -> Complex E, pos and E and resp. to each other
 
-def Generate_Beam(beam_spec, pos_set):
+def Calculate_IncidentField(beam_spec, pos_set):
     """
-    . Generates the electric on the positions specified
+    . Generates the incident electric field from the beam used on the positions specified
 
     . beam_spec = [beam_type, <params>]
     . pos_set = [ [x,y,z], ... ] for each point of interest
     """
+
+    def Calculate_IncidentField_PlaneWave_Point(pos, wavelength, beam_center, polarisation):
+        """
+        . Returns list for electric field vector components at a position, given by the plane wave beam equation (exact format copied from ADDA for comparison)
+        . Polarisation either "X" or "Y" for now
+        """
+        #Raw ADDA; vSubtr(DipoleCoord+j,beam_center,r1);
+        #          ctemp=imExp(WaveNum*DotProd(r1,prop));
+        k = 2.0*math.pi/wavelength;
+        r1 = np.array(pos)-np.array(beam_center);
+        ctemp=cmath.exp(1j*k*r1[2]);    #We assume here that the 'prop' direction (for wavevector) is always in Z direction for simplicity
+        ##
+        ## Implement with a Jones vector
+        ##
+        if(polarisation=="X"):
+            return [ctemp.real, 0.0, 0.0];
+        elif(polarisation=="Y"):
+            return [0.0, ctemp.real, 0.0];
+        else:
+            print("Invalid polarisation for plane wave: "+str(polarisation));
+            return [0.0, 0.0, 0.0];
+
+    def Calculate_IncidentField_LaguerreGaussian_Point(pos, wavelength, radial, azimuthal, alpha, beta, w_0, showVariables=True):
+        """
+        . pos = [x,y,z] point to get E at
+        . radial/azimuthal = 2 parameters for laguerre beam, spin and orbital angular momentum order
+            - Called m & n in paper "Gaussian, Hermite-Gaussian, and Laguerre-Gaussian beams: A primer"
+        """
+        z   = pos[2];
+        phi = math.atan2(pos[1],pos[0]);
+        rho = cmath.sqrt( pow(pos[0],2) + pow(pos[1],2) );
+
+        l   = radial;       #azimuthal;#8.0;        #Orbital angular momentum number
+        p   = azimuthal;    #radial;   #0.0;        #Spin angular momentum number
+        k   = 2.0*math.pi/wavelength;
+        z_R = k*pow(w_0, 2)/2.0;                    #Rayleigh factor
+
+        if(showVariables):
+            print("");
+            print("=====");
+            print("Variables");
+            print("=====");
+            print("l= "+str(l));
+            print("p= "+str(p));
+            print("k= "+str(k));
+            print("w_0= "+str(w_0));
+            print("z_R= "+str(z_R));
+            print("alpha= "+str(alpha));
+            print("beta= "+str(beta));
+            print("");
+        
+        def w(zeta):
+            return w_0*cmath.sqrt(1+pow(zeta,2));
+        
+        def L_l_p(value):
+            """
+            . Associated legendre polynomial
+            """
+            legendre_matrix = sp.clpmn(l,p,value);
+            return legendre_matrix[0][l][p];        #Note; [0] here refers to generalisation of array value, hence for scalar value each index [n] is identical
+    
+        def u_l_p():
+            # From same paper
+            C = (math.factorial(p))*cmath.sqrt( (2)/(math.pi*math.factorial(p)*( math.factorial( abs(l) + p ) )) );   #From pg 8 of “Gaussian Beams In Optics of Course” paper
+            return ( (C)/cmath.sqrt(1 +(pow(z,2)/pow(z_R,2))) )*pow( (rho*cmath.sqrt(2))/(w(z)), l)*(L_l_p( (2.0*pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-1j*k*pow(rho,2)*z)/(2.0*(pow(z,2)+pow(z_R,2))) ))*(cmath.exp(1j*l*phi))*(cmath.exp( (1j*(2.0*p +l+1))*(cmath.atan( (z)/(z_R) )) ));
+        
+        def E(kappa):
+            return u_l_p()*cmath.exp( (-k*pow(kappa,2)*z_R)/(2.0*(pow(k,2) - pow(kappa,2))) )*pow( (pow(kappa,2))/(pow(k,2) - pow(kappa,2)), (2.0*p+l+1.0)/(2) )*cmath.sqrt( (pow(k,2))/(pow(k,2) - pow(kappa,2)) );
+
+        def E_vector_component(component, kappa):
+            #Full vector version
+            #E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( np.array([alpha, beta, 0.0])*sp.jv(l, kappa*rho) + np.array([0.0, 0.0, 1.0])*( (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) ) );
+            #sp.jv(l, x) = Bessel function of 1st kind, order l
+
+            if(component == 0):     #X comp
+                return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( alpha*sp.jv(l, kappa*rho) );
+            elif(component == 1):   #Y comp
+                return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( beta*sp.jv(l, kappa*rho) );
+            elif(component == 2):   #Z comp
+                return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*(  (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) );
+            else:
+                return 0.0;
+
+        E_X_Comp = integrate.quad(lambda x: E_vector_component(0, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
+        E_Y_Comp = integrate.quad(lambda x: E_vector_component(1, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
+        E_Z_Comp = integrate.quad(lambda x: E_vector_component(2, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
+
+        #integrate.quad returns [value, error] => want to pull just the value
+        return [E_X_Comp[0].real, E_Y_Comp[0].real, E_Z_Comp[0].real];
+
+
     field_data = [];
     for pos in pos_set:
         E_field = [0.0, 0.0, 0.0];
@@ -389,103 +480,14 @@ def Generate_Beam(beam_spec, pos_set):
                 E_field = [pos[0], pos[1], pos[2]]
             case "laguerre":
                 #beam_spec = [beam_type, wavelength, azi, radial, alpha, beta, w_0]
-                E_field = Get_E_LaguerreGaussian_Beam(pos, beam_spec[1], beam_spec[2], beam_spec[3], beam_spec[4], beam_spec[5], beam_spec[6])
+                E_field = Calculate_IncidentField_LaguerreGaussian_Point(pos, beam_spec[1], beam_spec[2], beam_spec[3], beam_spec[4], beam_spec[5], beam_spec[6])
             case "plane":
                 #beam_spec = [beam_type, wavelength, azi, radial, alpha, beta, w_0]
-                E_field = Get_E_PlaneWave_Beam(pos, beam_spec[1], beam_spec[2], beam_spec[3])
+                E_field = Calculate_IncidentField_PlaneWave_Point(pos, beam_spec[1], beam_spec[2], beam_spec[3])
             case _:
                 print("Invalid beam type; ",beam_spec[0])
         field_data.append( [pos[0], pos[1], pos[2], np.sqrt( pow(E_field[0],2) + pow(E_field[1],2) + pow(E_field[2],2) ), E_field[0], E_field[1], E_field[2]] )
     return field_data
-
-def Get_E_PlaneWave_Beam(pos, wavelength, beam_center, polarisation):
-    """
-    . Returns list for electric field vector components at a position, given by the plane wave beam equation (exact format copied from ADDA for comparison)
-    . Polarisation either "X" or "Y" for now
-    """
-    #Raw ADDA; vSubtr(DipoleCoord+j,beam_center,r1);
-    #          ctemp=imExp(WaveNum*DotProd(r1,prop));
-    k = 2.0*math.pi/wavelength;
-    r1 = np.array(pos)-np.array(beam_center);
-    ctemp=cmath.exp(1j*k*r1[2]);    #We assume here that the 'prop' direction (for wavevector) is always in Z direction for simplicity
-    ##
-    ## Implement with a Jones vector
-    ##
-    if(polarisation=="X"):
-        return [ctemp.real, 0.0, 0.0];
-    elif(polarisation=="Y"):
-        return [0.0, ctemp.real, 0.0];
-    else:
-        print("Invalid polarisation for plane wave: "+str(polarisation));
-        return [0.0, 0.0, 0.0];
-
-def Get_E_LaguerreGaussian_Beam(pos, wavelength, radial, azimuthal, alpha, beta, w_0, showVariables=True):
-    """
-    . pos = [x,y,z] point to get E at
-    . radial/azimuthal = 2 parameters for laguerre beam, spin and orbital angular momentum order
-        - Called m & n in paper "Gaussian, Hermite-Gaussian, and Laguerre-Gaussian beams: A primer"
-    """
-    z   = pos[2];
-    phi = math.atan2(pos[1],pos[0]);
-    rho = cmath.sqrt( pow(pos[0],2) + pow(pos[1],2) );
-
-    l   = radial;       #azimuthal;#8.0;        #Orbital angular momentum number
-    p   = azimuthal;    #radial;   #0.0;        #Spin angular momentum number
-    k   = 2.0*math.pi/wavelength;
-    z_R = k*pow(w_0, 2)/2.0;                    #Rayleigh factor
-
-    if(showVariables):
-        print("");
-        print("=====");
-        print("Variables");
-        print("=====");
-        print("l= "+str(l));
-        print("p= "+str(p));
-        print("k= "+str(k));
-        print("w_0= "+str(w_0));
-        print("z_R= "+str(z_R));
-        print("alpha= "+str(alpha));
-        print("beta= "+str(beta));
-        print("");
-    
-    def w(zeta):
-        return w_0*cmath.sqrt(1+pow(zeta,2));
-    
-    def L_l_p(value):
-        """
-        . Associated legendre polynomial
-        """
-        legendre_matrix = sp.clpmn(l,p,value);
-        return legendre_matrix[0][l][p];        #Note; [0] here refers to generalisation of array value, hence for scalar value each index [n] is identical
-   
-    def u_l_p():
-        # From same paper
-        C = (math.factorial(p))*cmath.sqrt( (2)/(math.pi*math.factorial(p)*( math.factorial( abs(l) + p ) )) );   #From pg 8 of “Gaussian Beams In Optics of Course” paper
-        return ( (C)/cmath.sqrt(1 +(pow(z,2)/pow(z_R,2))) )*pow( (rho*cmath.sqrt(2))/(w(z)), l)*(L_l_p( (2.0*pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-pow(rho,2))/(pow(w(z),2)) ))*(cmath.exp( (-1j*k*pow(rho,2)*z)/(2.0*(pow(z,2)+pow(z_R,2))) ))*(cmath.exp(1j*l*phi))*(cmath.exp( (1j*(2.0*p +l+1))*(cmath.atan( (z)/(z_R) )) ));
-    
-    def E(kappa):
-        return u_l_p()*cmath.exp( (-k*pow(kappa,2)*z_R)/(2.0*(pow(k,2) - pow(kappa,2))) )*pow( (pow(kappa,2))/(pow(k,2) - pow(kappa,2)), (2.0*p+l+1.0)/(2) )*cmath.sqrt( (pow(k,2))/(pow(k,2) - pow(kappa,2)) );
-
-    def E_vector_component(component, kappa):
-        #Full vector version
-        #E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( np.array([alpha, beta, 0.0])*sp.jv(l, kappa*rho) + np.array([0.0, 0.0, 1.0])*( (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) ) );
-        #sp.jv(l, x) = Bessel function of 1st kind, order l
-
-        if(component == 0):     #X comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( alpha*sp.jv(l, kappa*rho) );
-        elif(component == 1):   #Y comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*( beta*sp.jv(l, kappa*rho) );
-        elif(component == 2):   #Z comp
-            return E(kappa)*cmath.exp(1j*l*phi)*cmath.exp(1j*z*cmath.sqrt(pow(k,2)-pow(kappa,2)))*(  (kappa)/(2*cmath.sqrt(pow(k,2) - pow(kappa,2))) )*( (1j*alpha - beta)*(cmath.exp(-1j*phi))*sp.jv(l-1, kappa*rho) - (1j*alpha + beta)*(cmath.exp(1j*phi))*sp.jv(l+1, kappa*rho) );
-        else:
-            return 0.0;
-
-    E_X_Comp = integrate.quad(lambda x: E_vector_component(0, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
-    E_Y_Comp = integrate.quad(lambda x: E_vector_component(1, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
-    E_Z_Comp = integrate.quad(lambda x: E_vector_component(2, x), 0.0, k, complex_func=True, epsrel=1.49e-12);
-
-    #integrate.quad returns [value, error] => want to pull just the value
-    return [E_X_Comp[0].real, E_Y_Comp[0].real, E_Z_Comp[0].real];
 
 def Sweep_Beam_Generation(space_data, wavelength):
     """
@@ -505,7 +507,7 @@ def Sweep_Beam_Generation(space_data, wavelength):
         beta = beta_base*(1+beta_sweep);
         for alpha_sweep in range(0, N_iter):
             alpha = alpha_base*(1+alpha_sweep);
-            field_data = Generate_Beam(["laguerreGaussian",wavelength,0,8, alpha,beta, w_0], space_data);
+            field_data = Calculate_IncidentField(["laguerreGaussian",wavelength,0,8, alpha,beta, w_0], space_data);
             Plot_2D_Array(
                 "Z",
                 "norm", 
@@ -535,26 +537,22 @@ def Fetch_Polarisability(wavelength, dipole_size, n):
     ##      => S always =0 for the plane wave cases
     ##          BUT will not equal 0 for the circular polarisation of laguerre for instance
     ##  **THIS WILL NEED CHANGING IN THE FUTURE**
-    ####
+    #### \/
     S  = (0.0*1.0)**2 # NOTE; Assumes only ever Z propogation
     k = 2.0*np.pi/wavelength
     alpha_LDR = cm / ( 1 + (cm/volume)*( (b1 +b2*permitivity_dielectric +b3*permitivity_dielectric*S)*((k*dipole_size)**2) -1j*(2.0/3.0)*((k*dipole_size)**3) ) )
 
 
     # SH_DDA formualtion
-    ep1 = (n)**2
-    ep2 = 1.0
-    epm = 1.333 # water
-    a0 = (4 * np.pi * 8.85e-12) * (volume) * ((ep1 - epm) / (ep1 + 2*epm))
-    a = a0 / (1 - (2 / 3) * 1j * k ** 3 * a0/(4*np.pi*8.85e-12))
+    # ep1 = (n)**2
+    # ep2 = 1.0
+    # epm = 1.333 # water
+    # a0 = (4 * np.pi * 8.85e-12) * (volume) * ((ep1 - epm) / (ep1 + 2*epm))
+    # a = a0 / (1 - (2 / 3) * 1j * k ** 3 * a0/(4*np.pi*8.85e-12))
 
+    return alpha_LDR
 
-    print("cm = ",cm)
-    print("alpha_LDR = ",alpha_LDR)
-    print("a = ",a)
-    return a
-
-def Calculate_T_Averaged_Force(dip_positions, dip_polarisations, dipole_indices, n, dipole_size, polarisability, beam_spec, mode=0):
+def Calculate_T_Averaged_Force(dip_positions, dip_polarisations, dipole_indices, beam_spec, mode=0):
     """
     . Calculates the total force vector on each dipole
     . This uses the calculation for polarisation, internal E field and beam incident E field on each dipole is known (found in ADDA, or manually if wanted)
@@ -568,10 +566,6 @@ def Calculate_T_Averaged_Force(dip_positions, dip_polarisations, dipole_indices,
     print("Calculating time-averaged forces for "+beam_spec[0]);
 
     dipole_forces = np.zeros( (len(dip_positions), 7), dtype=complex)
-    
-    # LDR is used in ADDA  y default, chosen with -pol <...>
-    #wavelength = beam_spec[1]
-    #polarisability = Fetch_Polarisability(wavelength, dipole_size, n.real) #### NOTE; GIVEN BY LOG, NOT NEEDED
 
     for i in range(len(dipole_indices)):
         if(i % 20 == 0):
@@ -635,13 +629,6 @@ def Calculate_ScatteredField_NearField(dipole_set, request_indices, beam_spec, g
     . dipole_set = all the dipoles involved in the system to be included in the scattering in a list.
                     NOTE; This list should be [x,y,z,  |P|^2,  Px,r,Px,i,  Py,r,Py,i,  Pz,r,Pz,i], where P is the polarisation of each dipole
     . request_indicies = the index (within the dipole_set list) of all the positions to get the near field for
-
-    ####
-    ## MODIFY TO ALSO ALLOW ARBITRARY POINTS TO BE QUERIED FOR NEAR FIELD E FIELD --> WORRY ABOUT SINGULARITIES IF TOO CLOSE 
-    ## TO OTHER DIPOLES / WITHIN ITS VOLUME PROBLEM?
-    ##
-    ## Pattern close but off in magnitude compared to ADDA -> Seems to be purely units problem -> should adjust for this
-    ####
     """
     print("Calculating near-field E for "+beam_spec[0]);
 
@@ -662,12 +649,8 @@ def Calculate_ScatteredField_NearField(dipole_set, request_indices, beam_spec, g
     E_interactions = np.zeros((len(request_indices),3), dtype=complex)
     for j in range(len(request_indices)):
         r_ind = request_indices[j]
-        ####
-        ## Bug-fixing display
         if(j % 50 == 0):
             print("     dipole "+str(j)+"/"+str(len(request_indices)))
-        ## Bug-fixing display
-        ####
         E_interactions[j] = Calculate_ScatteredField_NearField_Point(dip_positions, dip_polarisations, dip_positions[r_ind], beam_spec)
     return E_interactions   # [E_x, E_y, E_z], Complex values
 
@@ -720,6 +703,10 @@ def Calculate_ScatteredField_NearField_Point(dip_positions, dip_polarisations, p
 def Calculate_ScatteredField_FarField_Point(dip_positions, dip_polarisations, pos, beam_spec):
     """
     . Far-field scattering with the scattering amplitude form
+
+    ##
+    ## This function has not been fully tested
+    ##
     """
     k = 2.0*np.pi/beam_spec[1]
     # Calculate this scattered near-field at each requested point
@@ -733,10 +720,7 @@ def Calculate_TotalField_NearField_Point(pos, dip_positions, dip_polarisations, 
     """
     . Combines a scattered near field and incident field (from the beam) to give a total field within the particle
     """
-    ####
-    ## RENAME GEN BEAM TO CALACULATE_..._BEAM()
-    ####
-    E_beam = np.array(Generate_Beam(beam_spec, [pos]), dtype=complex)[0]    # Get 0th as only considering a single point
+    E_beam = np.array(Calculate_IncidentField(beam_spec, [pos]), dtype=complex)[0]    # Get 0th as only considering a single point
     E_scattered = Calculate_ScatteredField_NearField_Point(dip_positions, dip_polarisations, pos, beam_spec)
     E_total = np.zeros(len(E_beam), dtype=complex)
     E_total[:3] = pos                                   # Set position
@@ -925,8 +909,8 @@ def main_plot_adda_E_incident(input_shape_name, input_beam_name, input_beam_args
         case _:
             print("No beam name match found, hence no beam_spec assigned; ",input_beam_name)
     pos_set = np.array(posEField_ADDA_Ypol)[:,:3]
-    #posEField_Python_Xpol = Generate_Beam( [input_beam_name, wavelength, [0,0,0], "X"], pos_set)
-    posEField_Python_Ypol = Generate_Beam( beam_spec, pos_set)
+    #posEField_Python_Xpol = Calculate_IncidentField( [input_beam_name, wavelength, [0,0,0], "X"], pos_set)
+    posEField_Python_Ypol = Calculate_IncidentField( beam_spec, pos_set)
 
     # Plot data that has been read
     Plot_3dLattice_CrossSection(posEField_ADDA_Ypol, lattice_spacing, view_parameters=[2, lattice_spacing/2.0, "colour"], labels={"X":"X(10^-6m)", "Y":"Y(10^-6m)", "Title":"ADDA, Ypol, Plane Z="+str(lattice_spacing/2.0)+"(10^-6m)", "args":[]})
@@ -985,7 +969,7 @@ def main_plot_adda_E_force(input_shape_name, input_beam_name, input_beam_args, o
     # Read output data from ADDA
     paramDict = PullAddaData_Parameters("output_data/log")
     lattice_spacing = paramDict["dipole_size"]
-    polarisability = paramDict["polarisability"]
+    #polarisability = paramDict["polarisability"]
     
     posForce_ADDA_Xpol = PullAddaData_General("output_data/RadForce-X")        # Internal field of each dipole
     posPolarisation_ADDA_Xpol = PullAddaData_General("output_data/DipPol-X")    # Polarisation of each dipole
@@ -995,7 +979,7 @@ def main_plot_adda_E_force(input_shape_name, input_beam_name, input_beam_args, o
     plane_beam_spec = [input_beam_name, wavelength, [0,0,0], "X"]
     pos_set, value_set, index_set = Fetch_Plane_Subset(posPolarisation_ADDA_Xpol, view_parameters, include_planePos=True)     # Fetch plane to be plotted from the data
     dip_positions, dip_polarisations = Fetch_Separated_PolarisationSet(posPolarisation_ADDA_Xpol)
-    posForce_Python_Xpol = Calculate_T_Averaged_Force(dip_positions, dip_polarisations, range(len(posPolarisation_ADDA_Xpol)), material_refractive_index, lattice_spacing, polarisability, plane_beam_spec, mode=1)
+    posForce_Python_Xpol = Calculate_T_Averaged_Force(dip_positions, dip_polarisations, range(len(posPolarisation_ADDA_Xpol)), plane_beam_spec, mode=1)
 
     # Plot forces for ADDA and Python calculations
     Plot_3dLattice_CrossSection(posForce_ADDA_Xpol, lattice_spacing, view_parameters, labels={"X":"X(10^-6m)", "Y":"Y(10^-6m)", "Title":"ADDA, Ypol, Plane Z="+str(lattice_spacing/2.0)+"(10^-6m)", "args":[]})
@@ -1029,3 +1013,12 @@ match(sys.argv[1]):
         print("Invalid <COMMAND>; ",sys.argv[1])
 
 print("Program ended");
+
+
+##
+## (1) CORRECT THE GRID PLOT TO INCLUDE EDGES + WORK PROPERLY FOR ANY SLICE
+## (2) DO A ONCE OVER ON THE FORCE, CORRECT IT AS BEST YOU CAN
+## (3) REMOVE COMMENTS, ETC FROM ALL DDA PROGRAMS, CLEAN UP FOR SUBMISSION
+##      -> Do this for the other programs too e.g. dynamics_adda AND for OTT
+## (4) CONTINUE WORK ON MAIN PROJECT FILES + POSTER
+##

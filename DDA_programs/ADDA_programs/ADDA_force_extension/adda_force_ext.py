@@ -530,7 +530,7 @@ def laguerre_getParam_E_component(kappa, component, rho, phi, z, k, l, p, z_R, w
 	elif(component == 1):
 		# Same as X component, but beta NOT alpha term
 		# temp_v0 = kappa.real()*rho;
-		# bjndd_(&l, &temp_v0, &temp_v1, &temp_v2, &temp_v3 );		//Bessel function, only care about t2, not t3 or 4	//##### CAREFUL OF TYPES FOR THIS RETURN #####
+		# bjndd_(&l, &temp_v0, &temp_v1, &temp_v2, &temp_v3 );		//Bessel function, only care about t2, not t3 or 4
 		set_1 = cmath.exp(1.0j*l*phi);
 		set_2 = cmath.exp(1.0j*z*cmath.sqrt((k*k)-(kappa*kappa)));
 		set_3 = ( beta*laguerre_getParam_Bessel(kappa*rho, l) );
@@ -787,9 +787,6 @@ def Calculate_T_Averaged_Force(dip_positions, dip_polarisations, dipole_indices,
         pos = dip_positions[dip_ind]
         dip_force = np.zeros(7, dtype=complex)
         dip_force[:3] = pos
-        ####
-        ## Internal or near-field? How can you have a gradient with internal field?
-        ####
         E_func_totalNear = partial(Calculate_TotalField_NearField_Point, dip_positions=dip_positions, dip_polarisations=dip_polarisations, beam_spec=beam_spec, mode=0)     # Now is just a function of position to sample at
         for comp in range(3):
             # For each component
@@ -899,7 +896,7 @@ def Calculate_InternalField(dipole_set, request_indices, polarisability, beam_sp
         if(j % 50 == 0):
             print("     dipole "+str(j)+"/"+str(len(request_indices)))
         E_interactions[j, :3] = dip_positions[r_ind]
-        E_interactions[j, 4:] = Calculate_InternalField_Point(dip_polarisations[r_ind], polarisability)/np.sqrt(2.0)    ####### JUST ROOT 2 FOR TESTING FORCES --> FIX LATER #######
+        E_interactions[j, 4:] = Calculate_InternalField_Point(dip_polarisations[r_ind], polarisability)/np.sqrt(2.0)    ## Root(2) for force tests -> Check required here ##
         E_interactions[j, 3] = np.dot(E_interactions[j, 4:], E_interactions[j, 4:].conjugate())
 
     if(mode == 1):
@@ -980,9 +977,6 @@ def Calculate_TotalField_NearField_Point(pos, dip_positions, dip_polarisations, 
     """
     . Combines a scattered near field and incident field (from the beam) to give a total field within the particle
     """
-    ####
-    ## RENAME GEN BEAM TO CALACULATE_..._BEAM()
-    ####
     E_beam = np.array(Calculate_IncidentField(beam_spec, [pos]), dtype=complex)[0]    # Get 0th as only considering a single point
     E_scattered = Calculate_ScatteredField_NearField_Point(dip_positions, dip_polarisations, pos, beam_spec)
     E_total = np.zeros(len(E_beam), dtype=complex)
@@ -1139,10 +1133,6 @@ def Plot_3dLattice_CrossSection(data_set, lattice_spacing, view_parameters=[2, 0
     else:
         print("No particles to plot, perhaps the lattice is not in the plane specified?")
 
-
-####
-## MAKE BEAM SPEC A DICTIONARY
-####
 def main_plot_adda_E_incident(input_shape_name, input_beam_name, input_beam_args, output_folder, wavelength, dpl, material_refractive_index):
     """
     . Plots electric field at each dipole according to an ADDA calculation
@@ -1269,9 +1259,6 @@ Generate_Geom("rectangle", [40,2])
 
 match(sys.argv[1]):
     case 'plot_adda_Einc':
-        ####
-        ## ADD ITERATIVE SOLVER ARG -> MAKE WHOLE RUNNING OF ADDA PROCESS MORE STREAMLINED
-        ####
         main_plot_adda_E_incident("sphere16x16x16.geom", "plane", "", "output_data", 1.064, 15, 1.5+0j);
         # main_plot_adda_E_incident("sphere32x32x32.geom", "plane", "", "output_data", 1.064, 15, 1.5+0j);
         #main_plot_adda_E_incident("rectangle40x40x2.geom", "laguerre", [0,8], "output_data", 1.064, 4, 1.5+0j);
