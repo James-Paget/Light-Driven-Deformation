@@ -119,10 +119,20 @@ void generateRandomGrid() {
         //Spheroid
         //float factor_spheroid = 5.0;
         //boolean cond = ( ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) )/factor_spheroid  + pow(z-gridDim.z/2.0, 2)) < 0.9*gridDim.x;
+        //Hourglass
+        boolean cond_1 =  pow((x-gridDim.x/2.0), 2) + pow((y-gridDim.y/2.0),2) <= 4.0*abs(z-gridDim.z/2.0);
+        boolean cond_2 = abs(z-gridDim.z/2.0) < gridDim.z/5.0;
+        boolean cond = cond_1 && cond_2;
         //Torus
         //float c_factor = 18.0;
         //float rad_factor = 4.0;
         //boolean cond = pow( c_factor - sqrt(pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2)), 2) + pow(z-gridDim.z/2.0, 2) < pow(rad_factor, 2);
+        //Torus sector
+        //float c_factor = 18.0;
+        //float rad_factor = 4.0;
+        //boolean cond_1 = (x-gridDim.x/2.0 > 0) && (y-gridDim.y/2.0 > 0);
+        //boolean cond_2 = pow( c_factor - sqrt(pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2)), 2) + pow(z-gridDim.z/2.0, 2) < pow(rad_factor, 2);
+        //boolean cond = cond_1 && cond_2;
         //Spheroid + Torus
         //float factor_spheroid = 5.0;
         //boolean cond_spheroid = ( ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) )/factor_spheroid  + pow(z-gridDim.z/2.0, 2)) < 0.9*gridDim.x;
@@ -141,9 +151,9 @@ void generateRandomGrid() {
         //boolean cond_s2 = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z +gridDim.z/6.0 -gridDim.z/2.0, 2) ) < 0.5*gridDim.x;
         //boolean cond = cond_s1 && !cond_s2;
         //Sphere Tri Setup
-        boolean cond_ring = ringOfSpheresCond(new PVector(x,y,z), 3, 0.4*gridDim.x, 0.15*gridDim.x);
-        boolean cond_other = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0 +0.15*gridDim.x, 2) ) < 0.4*gridDim.x;
-        boolean cond = cond_ring || cond_other;
+        //boolean cond_ring = ringOfSpheresCond(new PVector(x,y,z), 3, 0.4*gridDim.x, 0.15*gridDim.x);
+        //boolean cond_other = ( pow(x-gridDim.x/2.0, 2) + pow(y-gridDim.y/2.0, 2) + pow(z-gridDim.z/2.0 +0.15*gridDim.x, 2) ) < 0.4*gridDim.x;
+        //boolean cond = cond_ring || cond_other;
         //Random
         //boolean cond = (random(0.0, 1.0) < 0.2);  //## Bug Fixing ##
         if(cond) {

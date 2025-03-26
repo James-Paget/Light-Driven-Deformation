@@ -11,7 +11,7 @@
 # System options
 #============================================================================================
 options:
-  frames: 10000
+  frames: 1
 #============================================================================================
 # System parameters
 #============================================================================================
@@ -36,18 +36,18 @@ display:
   max_size: 2e-6 # range will be 2 times this
   resolution: 201 # number of points in each direction of plot
   frame_min: 0 # starting frame for animation
-  frame_max: 10000 # will default to number of frames
+  frame_max: 10 # will default to number of frames
   z_offset: 0.0e-6
 #============================================================================================
 # Beam descriptions
 #============================================================================================
 beams:
   beam_1:
-    beamtype: BEAMTYPE_LAGUERRE_GAUSSIAN # parameter
-    E0: 300
+    beamtype: BEAMTYPE_GAUSS_CSP # parameter
+    E0: 2
     order: 3
-    w0: 0.6 # fraction of wavelength
-    jones: POLARISATION_LCP # parameter
+    w0: 0.5 # fraction of wavelength
+    jones: POLARISATION_X # parameter
     translation: None # translation in meters or None
     rotation: None # x rotation followed by z rotation in degrees or None
 #============================================================================================
@@ -62,17 +62,17 @@ particles:
       #radius: 500e-9
       coords: 1e-6 0.0 0.0
       altcolour: True
-    part_2:
-      material: FusedSilica
-      radius: 200e-9
-      coords: 0.5e-6 0.866e-6 0.0
-      altcolour: False
-    part_3:
-      coords: -0.5e-6 0.866e-6 0.0
-    part_4:
-      coords: -1e-6 0.0 0.0
-    part_5:
-      coords: -0.5e-6 -0.866e-6 0.0
-    part_6:
-      coords: 0.5e-6 -0.866e-6 0.0
+    # part_2:
+    #   material: FusedSilica
+    #   radius: 200e-9
+    #   coords: 0.5e-6 0.866e-6 0.0
+    #   altcolour: False
+    # part_3:
+    #   coords: -0.5e-6 0.866e-6 0.0
+    # part_4:
+    #   coords: -1e-6 0.0 0.0
+    # part_5:
+    #   coords: -0.5e-6 -0.866e-6 0.0
+    # part_6:
+    #   coords: 0.5e-6 -0.866e-6 0.0
 

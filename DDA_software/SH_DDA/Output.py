@@ -92,7 +92,7 @@ def make_vmd_file(filename_vtf,n_particles,frames,timestep,particles,optpos,beam
     MyFileObject.close()  # closes the file again
     return
 
-def make_excel_file(filename_xl,n_particles,frames,timestep,particles,optpos,include_force,optforces,include_couple,optcouples):
+def make_excel_file(filename_xl,n_particles,frames,timestep,particles,optpos,include_force,optforces,totforces,include_couple,optcouples):
     """
     Function to generate excel output file.
     Inputs:
@@ -100,6 +100,106 @@ def make_excel_file(filename_xl,n_particles,frames,timestep,particles,optpos,inc
       storing the positions etc.
     Outputs:
     None
+    """
+
+    # Create a workbook and add a worksheet.
+    workbook = xlsxwriter.Workbook(filename_xl)
+    worksheet = workbook.add_worksheet()
+
+    # Start from the first cell. Rows and columns are zero indexed.
+    worksheet.write(0,0,"time(s)")
+
+    for j in range (n_particles):
+        worksheet.write(0,j*3+1,"x{:d}(m)".format(j))
+        worksheet.write(0,j*3+2,"y{:d}(m)".format(j))
+        worksheet.write(0,j*3+3,"z{:d}(m)".format(j))
+    if include_force==True:
+        for j in range (n_particles):
+            # Optical force
+            worksheet.write(0,(j+1*n_particles)*3+1,"Fx{:d}(N)".format(j))
+            worksheet.write(0,(j+1*n_particles)*3+2,"Fy{:d}(N)".format(j))
+            worksheet.write(0,(j+1*n_particles)*3+3,"Fz{:d}(N)".format(j))
+            # Total force
+            worksheet.write(0,(j+2*n_particles)*3+1,"F_Tx{:d}(N)".format(j))
+            worksheet.write(0,(j+2*n_particles)*3+2,"F_Ty{:d}(N)".format(j))
+            worksheet.write(0,(j+2*n_particles)*3+3,"F_Tz{:d}(N)".format(j))
+    if include_couple==True:
+        offset = 3*n_particles
+        if include_force==False:
+            offset = n_particles
+        for j in range (n_particles):
+            worksheet.write(0,(j+offset)*3+1,"Cx{:d}(Nm)".format(j))
+            worksheet.write(0,(j+offset)*3+2,"Cy{:d}(Nm)".format(j))
+            worksheet.write(0,(j+offset)*3+3,"Cz{:d}(Nm)".format(j))
+
+    # Iterate over the data and write it out row by row.
+    for i in range(0, frames, 1):
+        worksheet.write(i+1,0,timestep*i)
+        for j in range (n_particles):
+            for k in range (3):
+                worksheet.write(i+1,j*3+k+1,optpos[i][j][k])
+        if include_force==True:
+            for j in range (n_particles):
+                for k in range (3):
+                    worksheet.write(i+1,(j+1*n_particles)*3+k+1,optforces[i][j][k])
+                    worksheet.write(i+1,(j+2*n_particles)*3+k+1,totforces[i][j][k])
+        if include_couple==True:
+            offset = 3*n_particles
+            if include_force==False:
+                offset = n_particles
+            for j in range (n_particles):
+                for k in range (3):
+                    worksheet.write(i+1,(j+offset)*3+k+1,optcouples[i][j][k])
+
+    workbook.close()
+    return
+
+def make_excel_file_dipoles(filename_xl, n_dipoles, frames, timestep, dipoptpos, dipoptforces):
+    """
+    Same as above excel file generation, but stores a list of dipoles rather than particles, and only records position and force
+
+    Function to generate excel output file.
+    Inputs:
+    filename_xl (string): filename with .xlsx extension for
+      storing the positions etc.
+    Outputs:
+    None
+    """
+
+    # Create a workbook and add a worksheet.
+    workbook = xlsxwriter.Workbook(filename_xl)
+    worksheet = workbook.add_worksheet()
+
+    # Start from the first cell. Rows and columns are zero indexed.
+    worksheet.write(0,0,"time(s)")
+
+    for j in range (n_dipoles):
+        worksheet.write(0,j*3+1,"x{:d}(m)".format(j))
+        worksheet.write(0,j*3+2,"y{:d}(m)".format(j))
+        worksheet.write(0,j*3+3,"z{:d}(m)".format(j))
+    for j in range (n_dipoles):
+        # Optical force
+        worksheet.write(0,(j+1*n_dipoles)*3+1,"Fx{:d}(N)".format(j))
+        worksheet.write(0,(j+1*n_dipoles)*3+2,"Fy{:d}(N)".format(j))
+        worksheet.write(0,(j+1*n_dipoles)*3+3,"Fz{:d}(N)".format(j))
+
+    # Iterate over the data and write it out row by row.
+    for i in range(0, frames, 1):
+        worksheet.write(i+1,0,timestep*i)
+        for j in range (n_dipoles):
+            for k in range (3):
+                worksheet.write(i+1,j*3+k+1, dipoptpos[i][j][k])
+        for j in range (n_dipoles):
+            for k in range (3):
+                worksheet.write(i+1,(j+1*n_dipoles)*3+k+1,dipoptforces[i][j][k])
+
+    workbook.close()
+    return
+
+def append_to_excel_file(filename_xl,n_particles,frames,timestep,particles,optpos,include_force,optforces,include_couple,optcouples):
+    """
+    Adds elements to an existsing excel file
+    Used by SimulationVaryRun.py to build excel files from multiple setups
     """
 
     # Create a workbook and add a worksheet.

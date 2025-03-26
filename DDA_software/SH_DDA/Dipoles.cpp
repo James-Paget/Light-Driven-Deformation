@@ -5,6 +5,12 @@
 // General Instructions:
 // clang / g++-14 -std=c++14 -Wall -Wextra -pedantic -c -fPIC Dipoles.cpp -o Dipoles.o
 // clang / g++-14 -shared Dipoles.o Beams.o -o Dipoles.dylib
+// 
+// Mac g++-14 Instructions
+// g++-14 -O3 -fopenmp -std=c++14 -Wall -Wextra -pedantic -c -fPIC Dipoles.cpp -o Dipoles.o
+// g++-14 -O3 -fopenmp -std=c++14 -Wall -Wextra -pedantic -c -fPIC Beams.cpp -o Beams.o
+// g++-14 -O3 -fopenmp -shared Dipoles.o Beams.o -o Dipoles.dylib
+// g++-14 -O3 -shared -o libBeams.dylib -fPIC -fopenmp Beams.cpp
 //
 // Linux Instructions:
 // g++-14 -std=c++14 -O3 -fopenmp -Wall -Wextra -pedantic -c -fPIC Dipoles.cpp -o Dipoles.o
@@ -400,7 +406,7 @@ void optical_force_array(double *array_of_particles, int number_of_particles, do
 }
 
 //======================================================================================
-void optical_force_torque_array(double *array_of_particles, int number_of_particles, double dipole_radius, double* dipole_primitives, long* dipole_primitive_num, double* inv_polar, BEAM_COLLECTION* beam_collection, double* final_optical_forces, double* final_optical_torques, double* final_optical_couples){
+void optical_force_torque_array(double *array_of_particles, int number_of_particles, double dipole_radius, double* dipole_primitives, long* dipole_primitive_num, double* inv_polar, BEAM_COLLECTION* beam_collection, double* final_optical_dipole_forces, double* final_optical_forces, double* final_optical_torques, double* final_optical_couples, int include_dipole_forces){
     //
     // This version returns the optical torques as well as forces, splitting them into the r X F contribution
     // and the p X E contributions.
@@ -543,8 +549,23 @@ void optical_force_torque_array(double *array_of_particles, int number_of_partic
         one_polar = p_array.row(i);
         optical_force_array.row(i) += 0.5*(grad_E_inc*one_polar).real();
     }
-    
- 
+
+    //
+    // Get forces for each dipole across all particles, raw unsummed
+    //
+    if(include_dipole_forces!=0) {     // Can optionally stop this calculation if not needed -> may want to add other force selection modes in future (e.g. only dipole forces, disclude others)
+        cumulative_counter = 0;
+        for (i=0; i<number_of_particles; i++){
+            for (j=0; j<dipole_primitive_num[i]; j++){
+                //dipoleIndex=cumulative_counter+j
+                final_optical_dipole_forces[3*(cumulative_counter +j)+0] = optical_force_array(cumulative_counter +j,0);
+                final_optical_dipole_forces[3*(cumulative_counter +j)+1] = optical_force_array(cumulative_counter +j,1);
+                final_optical_dipole_forces[3*(cumulative_counter +j)+2] = optical_force_array(cumulative_counter +j,2);
+            }
+            cumulative_counter += dipole_primitive_num[i];
+        }
+    }
+
     //
     // This is section (3): Summing the dipole forces for each particle.
     //
@@ -626,6 +647,8 @@ Eigen::MatrixXcd dipole_moment_array(Eigen::MatrixXd array_of_positions, int num
     // array_of_positions contains all positions of dipoles in NdNp x 3 list.
     // number_of_dipoles is total across all particles.
     // number_of_dipoles_in_primitive is assuming same dipole number in every particle.
+    //      NOTE; number_of_dipoles_in_primitive now replaced by dipole_primitive_num list that records the number of dipoles in each primitive 
+    //            provided, so variable particle sizes allowed now
     //
     int i,j,ii,ti,tj;
     int num_beams;
